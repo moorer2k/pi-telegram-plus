@@ -312,8 +312,7 @@ export function registerTelegramRenderer(
       (theme?.showPulse === false || !frame.pulse ? "" : "<code>" + frame.pulse + "</code>\n") +
       "\n<b>" + escapeHtml(section) + "</b>\n" + entries +
       (preview ? "\n" + preview : "") +
-      (footer ? "\n\n<i>" + escapeHtml(footer) + "</i>" : "") +
-      "";
+      (footer ? "\n\n<i>" + escapeHtml(footer) + "</i>" : "");
     try {
       // Keep edits serialized; an older animation frame must never overwrite
       // a newer tool event or the completed answer.
