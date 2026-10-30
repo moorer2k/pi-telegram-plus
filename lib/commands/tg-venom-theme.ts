@@ -16,6 +16,11 @@ const activities: VenomActivity[] = ["awakening", "tracking", "examining", "test
 const BACK = "Back";
 const defaults = VENOM_DEFAULTS;
 
+/** Reuse the live /tg menu message instead of sending new selection messages. */
+function pick(ui: MenuUi, title: string, options: string[]): Promise<string | undefined> {
+  return ui.menu ? ui.menu(title, options) : ui.select(title, options);
+}
+
 async function save(deps: TgConfigDeps, theme: VenomThemeOptions): Promise<void> {
   const next = { ...deps.getConfig(), venomTheme: theme };
   deps.setConfig(next);
@@ -45,19 +50,18 @@ export async function configVenomThemeFlow(ui: MenuUi, deps: TgConfigDeps): Prom
       "Reset Venom appearance",
       BACK,
     ];
-    const choice = await ui.select("Venom appearance", options);
+    const choice = await pick(ui, "Venom appearance", options);
     if (!choice || choice === BACK) return;
     if (choice === options[0]) {
       const presets: VenomThemePreset[] = ["blacksite", "lethal-protector", "minimal-terminal"];
-      const selected = await ui.select("Venom presentation preset (replaces preset headings and labels)", presets);
+      const selected = await pick(ui, "Venom presentation preset (replaces preset headings and labels)", presets);
       if (!selected || !presets.includes(selected as VenomThemePreset)) continue;
       const preset = selected as VenomThemePreset;
       const updated = { ...theme, preset, sectionTitle: VENOM_PRESETS[preset].sectionTitle,
         transmissionTitle: VENOM_PRESETS[preset].transmissionTitle, labels: { ...VENOM_PRESETS[preset].labels } };
       await save(deps, updated);
-      ui.notify("Venom presentation set to " + preset, "info");
     } else if (choice === options[1]) {
-      const selected = await ui.select("Edit Venom text", [...entries, BACK]);
+      const selected = await pick(ui, "Edit Venom text", [...entries, BACK]);
       if (!selected || selected === BACK) continue;
       const idx = entries.indexOf(selected);
       if (idx < 0) continue;
@@ -70,7 +74,7 @@ export async function configVenomThemeFlow(ui: MenuUi, deps: TgConfigDeps): Prom
       else updated[key] = venomThemeText(input, defaults[key], max);
       await save(deps, updated);
     } else if (choice === options[2]) {
-      const selected = await ui.select("Edit activity wording", [...statuses, BACK]);
+      const selected = await pick(ui, "Edit activity wording", [...statuses, BACK]);
       if (!selected || selected === BACK) continue;
       const idx = statuses.indexOf(selected);
       if (idx < 0) continue;
@@ -84,7 +88,7 @@ export async function configVenomThemeFlow(ui: MenuUi, deps: TgConfigDeps): Prom
       await save(deps, { ...theme, labels });
     } else if (choice === options[3]) {
       const choices = ["symbiote", "spinner", "static"] as const;
-      const selected = await ui.select("Animation style", [...choices]);
+      const selected = await pick(ui, "Animation style", [...choices]);
       if (selected && choices.some(v => v === selected)) {
         await save(deps, { ...theme, animation: selected as typeof choices[number] });
       }
@@ -110,7 +114,6 @@ export async function configVenomThemeFlow(ui: MenuUi, deps: TgConfigDeps): Prom
     } else if (choice === options[10]) {
       if (await ui.confirm("Reset Venom appearance?", "Restore all default theme labels, animations and layout settings?")) {
         await save(deps, {});
-        ui.notify("Venom appearance reset", "info");
       }
     }
   }
