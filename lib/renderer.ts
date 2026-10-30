@@ -9,7 +9,7 @@ import type { TelegramConfig, TelegramRenderLevel, TelegramTransport, TelegramTu
 import type { SecretStore } from "./tui/secrets.ts";
 import { RENDER_LEVELS } from "./types.ts";
 import { log } from "./logger.ts";
-import { venomActivity, venomThemeFrame, venomThemeLabel, venomThemeNumber, venomThemeText, formatVenomContextUsage, formatVenomFooter, formatVenomConsole, VENOM_DEFAULTS, venomSectionTitle, venomTransmissionTitle, venomToolLine, venomCompletionLabel, venomPreset, type VenomActivity } from "./venom-theme.ts";
+import { venomActivity, venomThemeFrame, venomThemeLabel, venomThemeNumber, venomThemeText, formatVenomContextUsage, formatVenomFooter, formatVenomConsole, VENOM_DEFAULTS, venomSectionTitle, venomTransmissionTitle, venomToolLine, venomCompletionLabel, formatVenomTelemetry, type VenomActivity } from "./venom-theme.ts";
 
 const renderLog = log.child("renderer");
 
@@ -270,7 +270,7 @@ export function registerTelegramRenderer(
   const progress = {
     target: "", lines: [] as string[], latest: "", messages: [] as string[],
     count: 0, lastEdit: 0, frame: 0, editing: false,
-    activity: "awakening" as VenomActivity, started: 0, verified: false,
+    activity: "awakening" as VenomActivity, started: 0,
   };
   let progressTimer: ReturnType<typeof setInterval> | undefined;
   const stopProgressTimer = () => {
@@ -305,14 +305,14 @@ export function registerTelegramRenderer(
     const modelName = session?.model?.id;
     const header = venomThemeText(theme?.title, VENOM_DEFAULTS.title);
     const section = venomSectionTitle(theme);
-    const footer = formatVenomFooter(progress.count, Date.now() - progress.started, context, modelName, theme);
+    const footer = formatVenomTelemetry(progress.count, Date.now() - progress.started, context, modelName, theme);
     const html =
       "<b>" + frame.eye + " " + escapeHtml(header) + "</b>\n" +
       "<i>" + escapeHtml(venomThemeLabel(progress.activity, theme)) + "</i>\n" +
       (theme?.showPulse === false || !frame.pulse ? "" : "<code>" + frame.pulse + "</code>\n") +
       "\n<b>" + escapeHtml(section) + "</b>\n" + entries +
       (preview ? "\n" + preview : "") +
-      (footer ? "\n\n<i>" + escapeHtml(footer) + "</i>" : "");
+      (footer ? "\n\n<i>" + escapeHtml(footer).replace(/\n/g, "</i>\n<i>") + "</i>" : "");
     try {
       // Keep edits serialized; an older animation frame must never overwrite
       // a newer tool event or the completed answer.
@@ -470,7 +470,6 @@ export function registerTelegramRenderer(
       progress.lastEdit = 0;
       progress.frame = 0;
       progress.activity = "awakening";
-      progress.verified = false;
       progress.started = Date.now();
       progress.editing = false;
       // Telegram has no continually animated text format. Edit the existing
@@ -556,7 +555,6 @@ ${partial}`);
     toolArgs.delete(event.toolCallId);
     if (level === "progress") {
       if (event.isError) {
-        progress.verified = false;
         progress.activity = "adapting";
         const failure = formatToolFailureBrief(event.toolName, event.result, args);
         await addProgress(venomToolLine(event.toolName, args, failure, deps.getConfig().venomTheme, true));
