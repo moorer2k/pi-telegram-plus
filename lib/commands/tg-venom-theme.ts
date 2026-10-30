@@ -3,14 +3,13 @@ import type { MenuUi } from "./telegram-commands.ts";
 import type { VenomThemeOptions } from "../types.ts";
 import { VENOM_DEFAULTS, venomStatusLabel, venomThemeNumber, venomThemeText, type VenomActivity } from "../venom-theme.ts";
 
-type TextKey = "title" | "sectionTitle" | "transmissionTitle" | "footerLabel" | "consolePrefix" | "divider" | "awaitingText";
+type TextKey = "title" | "sectionTitle" | "transmissionTitle" | "footerLabel" | "consolePrefix" | "awaitingText";
 const textFields: Array<[TextKey, string, number]> = [
   ["title", "Bot title", 72],
   ["sectionTitle", "Console heading", 72],
   ["transmissionTitle", "Transmission heading", 72],
   ["footerLabel", "Elapsed-time label", 24],
   ["consolePrefix", "Terminal prompt", 8],
-  ["divider", "Divider", 48],
   ["awaitingText", "Waiting text", 72],
 ];
 const activities: VenomActivity[] = ["awakening", "tracking", "examining", "testing", "adapting", "hunting"];

@@ -9,7 +9,7 @@ import type { TelegramConfig, TelegramRenderLevel, TelegramTransport, TelegramTu
 import type { SecretStore } from "./tui/secrets.ts";
 import { RENDER_LEVELS } from "./types.ts";
 import { log } from "./logger.ts";
-import { venomActivity, venomThemeFrame, venomThemeLabel, venomThemeNumber, venomThemeText, formatHuntDuration, formatVenomConsole, VENOM_DEFAULTS, type VenomActivity } from "./venom-theme.ts";
+import { venomActivity, venomThemeFrame, venomThemeLabel, venomThemeNumber, venomThemeText, formatVenomContextUsage, formatVenomFooter, formatVenomConsole, VENOM_DEFAULTS, type VenomActivity } from "./venom-theme.ts";
 
 const renderLog = log.child("renderer");
 
@@ -259,7 +259,7 @@ export function registerTelegramRenderer(
     transport: TelegramTransport;
     getActiveTurn: (chatId?: number, messageThreadId?: number) => TelegramTurn | undefined;
     hasActiveTurns?: () => boolean;
-    getSession?: () => { isStreaming: boolean; extensionRunner: { createCommandContext(): unknown } } | undefined;
+    getSession?: () => { isStreaming: boolean; extensionRunner: { createCommandContext(): unknown }; model?: { id?: string; contextWindow?: number }; getContextUsage?: () => unknown } | undefined;
     /** Shared secret store, so assistant replies are redacted too (§4.7.4). */
     secrets?: SecretStore;
   },
@@ -296,22 +296,23 @@ export function registerTelegramRenderer(
     const previewLength = venomThemeNumber(theme?.previewLength, 500, 100, 1500);
     const preview = progress.latest ? "\n\n<b>" + escapeHtml(venomThemeText(theme?.transmissionTitle, VENOM_DEFAULTS.transmissionTitle)) + "</b>\n" + escapeHtml(progress.latest.slice(0, previewLength)) : "";
     const frame = venomThemeFrame(progress.frame++, theme);
-    const huntTime = formatHuntDuration(Date.now() - progress.started);
+    // Live metrics may be absent on some Pi/OMP host versions.
+    const session = deps.getSession?.();
+    let contextUsage: unknown;
+    try { contextUsage = session?.getContextUsage?.(); }
+    catch (err) { renderLog.debug("context usage unavailable", { err }); }
+    const context = formatVenomContextUsage(contextUsage, session?.model?.contextWindow);
+    const modelName = session?.model?.id;
     const header = venomThemeText(theme?.title, VENOM_DEFAULTS.title);
     const section = venomThemeText(theme?.sectionTitle, VENOM_DEFAULTS.sectionTitle);
-    const divider = venomThemeText(theme?.divider, VENOM_DEFAULTS.divider, 48);
-    const footer = [
-      theme?.showOperations === false ? "" : progress.count + " operations",
-      theme?.showElapsed === false ? "" : venomThemeText(theme?.footerLabel, VENOM_DEFAULTS.footerLabel, 24) + " " + huntTime,
-    ].filter(Boolean).join(" · ");
+    const footer = formatVenomFooter(progress.count, Date.now() - progress.started, context, modelName, theme);
     const html =
       "<b>" + frame.eye + " " + escapeHtml(header) + "</b>\n" +
       "<i>" + escapeHtml(venomThemeLabel(progress.activity, theme)) + "</i>\n" +
       (theme?.showPulse === false || !frame.pulse ? "" : "<code>" + frame.pulse + "</code>\n") +
       "\n<b>" + escapeHtml(section) + "</b>\n" + entries +
       (preview ? "\n" + preview : "") +
-      (footer ? "\n\n<i>" + escapeHtml(footer) + "</i>" : "") +
-      "\n" + escapeHtml(divider);
+      (footer ? "\n\n<i>" + escapeHtml(footer) + "</i>" : "");
     try {
       // Keep edits serialized; an older animation frame must never overwrite
       // a newer tool event or the completed answer.

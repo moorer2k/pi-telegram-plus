@@ -28,8 +28,7 @@ Example project file (keep all existing fields, such as botId):
     "transmissionTitle": "SYMBIOTE TRANSMISSION",
     "footerLabel": "hunting",
     "consolePrefix": ">",
-    "divider": "━━━━━━━━━━━━",
-    "animation": "symbiote",
+      "animation": "symbiote",
     "animationIntervalMs": 2600,
     "visibleOperations": 3,
     "previewLength": 500,
@@ -49,3 +48,5 @@ Settings persist across restarts. Changes to rendering text apply to subsequent 
 The animation uses edits to the same Telegram message, not a native GIF or sticker. Rate limits depend on the Telegram Bot API and client. **No additional model calls are made.**
 
 Check with `npm ci && npm test && npm run typecheck` before merging; the full suite and live Telegram client have not been exercised in this environment.
+
+The live progress footer now includes operation count, measured context usage (percentage/window), the active model ID, and elapsed hunting time. Missing context metrics are omitted. The previous trailing divider is not rendered; legacy `venomTheme.divider` settings are accepted but ignored.

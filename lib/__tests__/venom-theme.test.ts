@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { VENOM_PULSE_FRAMES, venomActivity, venomPulse, venomStatusLabel, formatHuntDuration, formatConsoleActivity, formatVenomConsole, venomThemeFrame, venomThemeLabel, venomThemeText, venomThemeNumber } from "../venom-theme.ts";
+import { VENOM_PULSE_FRAMES, venomActivity, venomPulse, venomStatusLabel, formatHuntDuration, formatConsoleActivity, formatVenomConsole, venomThemeFrame, venomThemeLabel, venomThemeText, venomThemeNumber, formatVenomContextUsage, formatVenomFooter } from "../venom-theme.ts";
 
 describe("Venom Lethal Protector presentation", () => {
   it("cycles through symbiote pulse frames without reporting fictional completion", () => {
@@ -51,6 +51,23 @@ describe("Venom Lethal Protector presentation", () => {
     expect(output).toContain("$ read /b");
     expect(output).toContain("$ bash npm test");
     expect(output).not.toContain("read /a");
+  });
+
+  it("formats measured context usage as percentage and context window", () => {
+    expect(formatVenomContextUsage({ tokens: 21_364, contextWindow: 98_000 })).toBe("21.8% / 98k");
+    expect(formatVenomContextUsage({ percent: 21.8, contextWindow: 98_000 })).toBe("21.8% / 98k");
+    expect(formatVenomContextUsage({ tokens: 2_000 }, 32_768)).toBe("6.1% / 32.8k");
+    expect(formatVenomContextUsage({ tokens: 12_000 })).toBeUndefined();
+    expect(formatVenomContextUsage(undefined, 98_000)).toBeUndefined();
+  });
+
+  it("keeps the footer self-contained with no trailing divider", () => {
+    expect(formatVenomFooter(3, 90_000, "21.8% / 98k", "qwen3.5-27b"))
+      .toBe("3 operations · 21.8% / 98k · qwen3.5-27b · hunting 1m 30s");
+    expect(formatVenomFooter(0, 0, undefined, undefined, { showElapsed: false }))
+      .toBe("0 operations");
+    expect(formatVenomFooter(2, 0, undefined, undefined, { showOperations: false, showElapsed: false }))
+      .toBe("");
   });
 
   it("uses Lethal Protector state language", () => {
