@@ -299,6 +299,7 @@ export function createTelegramTransport(
       return await callApi<TelegramSentMessage>("sendRichMessage", {
         chat_id: chatId,
         rich_message: { markdown },
+        link_preview_options: { is_disabled: cfg().linkPreviews !== true },
         ...messageTargetFields(messageThreadId, replyToMessageId),
       }, undefined, lease, delivery);
     } catch (err) {
@@ -325,6 +326,7 @@ export function createTelegramTransport(
           chat_id: chatId,
           text: chunk,
           parse_mode: "HTML",
+          link_preview_options: { is_disabled: cfg().linkPreviews !== true },
           ...messageTargetFields(messageThreadId, replyToMessageId),
         };
         const msg = await callApi<TelegramSentMessage>("sendMessage", body, undefined, lease, delivery)
@@ -337,6 +339,7 @@ export function createTelegramTransport(
             return callApi<TelegramSentMessage>("sendMessage", {
               chat_id: chatId,
               text: stripHtml(chunk),
+              link_preview_options: { is_disabled: cfg().linkPreviews !== true },
               ...messageTargetFields(messageThreadId, replyToMessageId),
             }, undefined, lease, delivery);
           });
@@ -355,6 +358,7 @@ export function createTelegramTransport(
         chat_id: chatId,
         text: first,
         parse_mode: "HTML",
+        link_preview_options: { is_disabled: true },
         reply_markup,
         ...messageTargetFields(messageThreadId, replyToMessageId),
       }, undefined, lease).catch((err) => {
@@ -363,6 +367,7 @@ export function createTelegramTransport(
         return callApi<TelegramSentMessage>("sendMessage", {
           chat_id: chatId,
           text: stripHtml(first),
+          link_preview_options: { is_disabled: true },
           reply_markup,
           ...messageTargetFields(messageThreadId, replyToMessageId),
         }, undefined, lease);
@@ -377,6 +382,7 @@ export function createTelegramTransport(
             chat_id: chatId,
             message_id: messageId,
             rich_message: { markdown: richMarkdown },
+            link_preview_options: { is_disabled: true },
           }, undefined, lease);
           return;
         } catch (err) {
@@ -391,6 +397,7 @@ export function createTelegramTransport(
         message_id: messageId,
         text: first,
         parse_mode: "HTML",
+        link_preview_options: { is_disabled: true },
       }, undefined, lease).catch((err) => {
         if (isNetworkError(err)) return; // swallow; nothing useful to retry
         warnHtmlFallback("editMessageText", err, first);
@@ -398,6 +405,7 @@ export function createTelegramTransport(
           chat_id: chatId,
           message_id: messageId,
           text: stripHtml(first),
+          link_preview_options: { is_disabled: true },
         }, undefined, lease).catch(apiLog.swallow("debug", "editMessageText plain-text fallback failed", { chatId, messageId }));
       });
     },
