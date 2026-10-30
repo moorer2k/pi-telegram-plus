@@ -9,7 +9,7 @@ import type { TgConfigDeps, SessionDeps } from "./register.ts";
 import type { BotRecord, BotRegistry, CapturedAgentSession, TelegramConfig } from "../types.ts";
 import { currentHostName } from "../tui/host.ts";
 import type { TuiHost } from "../tui-bridge.ts";
-import { configToolFlow, configThinkingFlow, configRetryFlow, configBashFlow, configGroupAccessFlow, configSessionIsolationFlow, configGroupJoinAlertsFlow } from "./tg-config.ts";
+import { configToolFlow, configThinkingFlow, configRetryFlow, configBashFlow, configGroupAccessFlow, configSessionIsolationFlow, configGroupJoinAlertsFlow, configLinkPreviewsFlow } from "./tg-config.ts";
 import { formatPairingInstructions } from "../pairing.ts";
 import { formatDebugReport } from "./info.ts";
 import {
@@ -437,6 +437,7 @@ export function buildConfigMenuOptions(
     `👥 Group access: ${config.groupAccess ?? "owner-mentions"}`,
     `🔒 Chat sessions: ${config.sessionIsolation ?? "shared"}`,
     `🔔 Group join alerts: ${config.groupJoinAlerts === false ? "off" : "on"}`,
+    `Link previews: ${config.linkPreviews === true ? "on" : "off"}`,
     BACK_LABEL,
   ];
 }
@@ -473,6 +474,8 @@ async function configMenu(ui: MenuUi, configDeps: TgConfigDeps, sessionDeps?: Se
       await configSessionIsolationFlow(ui, configDeps);
     } else if (choice.startsWith("🔔 Group join alerts:")) {
       await configGroupJoinAlertsFlow(ui, configDeps);
+    } else if (choice.startsWith("Link previews:")) {
+      await configLinkPreviewsFlow(ui, configDeps);
     }
   }
 }
