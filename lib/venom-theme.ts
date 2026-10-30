@@ -1,3 +1,4 @@
+import type { VenomThemeOptions } from "./types.ts";
 /** Telegram-friendly Lethal Protector visual identity.
  * Frames are activity pulses, not estimates of task completion.
  * No HTML escaping here; the renderer owns escaping of untrusted tool text.
@@ -57,4 +58,49 @@ export function formatHuntDuration(elapsedMs: number): string {
 export function formatConsoleActivity(lines: readonly string[], escape: (value: string) => string): string {
   if (lines.length === 0) return "<code>&gt; awaiting target…</code>";
   return lines.slice(-3).map(line => "<code>&gt; " + escape(line) + "</code>").join("\n");
+}
+
+export const VENOM_DEFAULTS = {
+  title: "VENOM // LETHAL PROTECTOR",
+  sectionTitle: "THE HUNT // TERMINAL",
+  transmissionTitle: "SYMBIOTE TRANSMISSION",
+  footerLabel: "hunting",
+  consolePrefix: ">",
+  divider: "━━━━━━━━━━━━",
+  awaitingText: "awaiting target…",
+} as const;
+
+export function venomThemeText(value: unknown, fallback: string, max = 72): string {
+  if (typeof value !== "string") return fallback;
+  const clean = value.replace(/[\x00-\x1f\x7f<>]/g, " ").trim().slice(0, max);
+  return clean || fallback;
+}
+
+export function venomThemeNumber(value: unknown, fallback: number, min: number, max: number): number {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.max(min, Math.min(max, Math.round(value)))
+    : fallback;
+}
+
+export function venomThemeLabel(activity: VenomActivity, options?: VenomThemeOptions): string {
+  return venomThemeText(options?.labels?.[activity], venomStatusLabel(activity), 48);
+}
+
+export function venomThemeFrame(index: number, options?: VenomThemeOptions) {
+  if (options?.animation === "static") return { eye: "◆", pulse: "" };
+  const frame = venomPulse(index);
+  if (options?.animation === "spinner") return { eye: frame.eye, pulse: "" };
+  return frame;
+}
+
+export function formatVenomConsole(
+  lines: readonly string[],
+  escape: (value: string) => string,
+  options?: VenomThemeOptions,
+): string {
+  const prefix = venomThemeText(options?.consolePrefix, VENOM_DEFAULTS.consolePrefix, 8);
+  const maxLines = venomThemeNumber(options?.visibleOperations, 3, 1, 8);
+  const selected = lines.slice(-maxLines);
+  if (selected.length === 0) return "<code>" + escape(prefix + " " + venomThemeText(options?.awaitingText, VENOM_DEFAULTS.awaitingText)) + "</code>";
+  return selected.map(line => "<code>" + escape(prefix + " " + line) + "</code>").join("\n");
 }
