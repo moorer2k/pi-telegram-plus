@@ -259,6 +259,32 @@ export function registerTelegramRenderer(
   const sentInlineEvents = new Set<string>();
   const toolUpdateAt = new Map<string, number>();
   const toolArgs = new Map<string, unknown>();
+  const progress = { target: "", lines: [] as string[], latest: "", count: 0, lastEdit: 0 };
+  const progressMode = () => deps.getConfig().tool === "progress";
+  const progressTarget = () => {
+    const turn = deps.getActiveTurn();
+    return turn?.replaceMessageId !== undefined
+      ? String(turn.chatId) + ":" + String(turn.messageThreadId ?? "main") + ":" + String(turn.replaceMessageId)
+      : "";
+  };
+  const updateProgress = async (force = false) => {
+    const turn = deps.getActiveTurn();
+    if (!progressMode() || !turn || !progress.target || progressTarget() !== progress.target) return;
+    if (!force && Date.now() - progress.lastEdit < 2000) return;
+    progress.lastEdit = Date.now();
+    const entries = progress.lines.slice(-4).map(line => "• " + escapeHtml(line)).join("\n");
+    const preview = progress.latest ? "\n\n<b>Latest update</b>\n" + escapeHtml(progress.latest.slice(0, 400)) : "";
+    await deps.transport.editText(turn.chatId, turn.replaceMessageId!,
+      "<b>◐ VENOM · Working</b>\n\n" + (entries || "Preparing…") + preview +
+      "\n\n<i>" + progress.count + " operations</i>"
+    ).catch(err => renderLog.debug("progress edit failed", { err }));
+  };
+  const addProgress = async (line: string) => {
+    if (!progressMode() || !progress.target || progressTarget() !== progress.target) return;
+    const safe = redactFor(deps.getActiveTurn(), line).replace(/\s+/g, " ").slice(0, 150);
+    if (safe !== progress.lines.at(-1)) progress.lines.push(safe);
+    await updateProgress();
+  };
 
   /** §4.7.4: replace this chat's tracked secrets before any escaping happens. */
   const redactFor = (turn: TelegramTurn | undefined, text: string): string => {
@@ -389,21 +415,14 @@ export function registerTelegramRenderer(
     sentInlineEvents.clear();
     toolArgs.clear();
     toolUpdateAt.clear();
-    const turn = deps.getActiveTurn();
-    if (!turn) return;
-    if (turn.replaceMessageId !== undefined) await deps.transport.editText(turn.chatId, turn.replaceMessageId, "🤖 <b>Working…</b>");
-    } catch (err) { renderLog.warn("render status-clear handler failed", { err }); }
-  });
-
-  pi.on("agent_start", async () => {
-    try {
-    sentInlineEvents.clear();
-    toolArgs.clear();
-    toolUpdateAt.clear();
     workflowNoticeSent = false;
+    if (progressMode()) { progress.target = progressTarget(); progress.lines = []; progress.latest = ""; progress.count = 0; progress.lastEdit = 0; }
     const turn = deps.getActiveTurn();
     if (!turn) return;
-    if (turn.replaceMessageId !== undefined) await deps.transport.editText(turn.chatId, turn.replaceMessageId, "🤖 <b>Working…</b>");
+    if (turn.replaceMessageId !== undefined) {
+      if (progressMode()) await updateProgress(true);
+      else await deps.transport.editText(turn.chatId, turn.replaceMessageId, "🤖 <b>Working…</b>");
+    }
     } catch (err) { renderLog.warn("render status-clear handler failed", { err }); }
   });
 
@@ -424,6 +443,12 @@ export function registerTelegramRenderer(
     }
     const level = renderLevel(deps.getConfig(), "tool");
     if (level === "hidden") return;
+    if (level === "progress") {
+      progress.count++;
+      toolArgs.set(event.toolCallId, event.args);
+      await addProgress(formatToolBrief(event.toolName, event.args).replace(/^🔧 /, ""));
+      return;
+    }
     toolArgs.set(event.toolCallId, event.args);
     const inline = level === "brief"
       ? formatToolBrief(event.toolName, event.args)
@@ -464,6 +489,10 @@ ${partial}`);
     toolUpdateAt.delete(event.toolCallId);
     const args = toolArgs.get(event.toolCallId);
     toolArgs.delete(event.toolCallId);
+    if (level === "progress") {
+      if (event.isError) await addProgress(formatToolFailureBrief(event.toolName, event.result, args));
+      return;
+    }
     if (level === "hidden") return;
     const status = event.isError ? "❌ Tool failed" : "✅ Tool finished";
     if (level === "brief") {
@@ -521,7 +550,10 @@ ${partial}`);
     const images = contentImages(message.content);
 
     const hasBody = body.trim().length > 0;
-    if (hasBody) {
+    if (hasBody && progressMode() && progress.target && progressTarget() === progress.target) {
+      progress.latest = body.replace(/\s+/g, " ").trim();
+      await updateProgress(true);
+    } else if (hasBody) {
       // A Markdown table cannot be expressed in Telegram's HTML mode, so the
       // renderer would have to fake one (card / box-drawing / transposed). When
       // the answer contains a real GFM table, prefer a Rich Message: Telegram
@@ -561,4 +593,18 @@ ${partial}`);
     } catch (err) { renderLog.warn("render assistant_message handler failed", { err }); }
   });
 
+  pi.on("agent_end", async () => {
+    try {
+      if (!progressMode() || !progress.target || progressTarget() !== progress.target) return;
+      const turn = deps.getActiveTurn();
+      if (!turn) return;
+      const final = progress.latest;
+      progress.target = "";
+      if (final) {
+        await sendToTurn(markdownToTelegramHtml(final), { final: true, richMarkdown: richMarkdownForTables(final) });
+      } else if (turn.replaceMessageId !== undefined) {
+        await deps.transport.editText(turn.chatId, turn.replaceMessageId, "<b>VENOM · Finished</b>");
+      }
+    } catch (err) { renderLog.warn("progress finalization failed", { err }); }
+  });
 }
