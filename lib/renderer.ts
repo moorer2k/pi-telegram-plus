@@ -9,7 +9,7 @@ import type { TelegramConfig, TelegramRenderLevel, TelegramTransport, TelegramTu
 import type { SecretStore } from "./tui/secrets.ts";
 import { RENDER_LEVELS } from "./types.ts";
 import { log } from "./logger.ts";
-import { venomActivity, venomPulse, venomStatusLabel, formatHuntDuration, formatConsoleActivity, type VenomActivity } from "./venom-theme.ts";
+import { venomActivity, venomThemeFrame, venomThemeLabel, venomThemeNumber, venomThemeText, formatHuntDuration, formatVenomConsole, VENOM_DEFAULTS, type VenomActivity } from "./venom-theme.ts";
 
 const renderLog = log.child("renderer");
 
@@ -287,21 +287,31 @@ export function registerTelegramRenderer(
   const updateProgress = async (force = false) => {
     const turn = deps.getActiveTurn();
     if (!progressMode() || !turn || !progress.target || progressTarget() !== progress.target) return;
-    if (progress.editing || (!force && Date.now() - progress.lastEdit < 2400)) return;
+    const theme = deps.getConfig().venomTheme;
+    const editGap = venomThemeNumber(theme?.animationIntervalMs, 2600, 1800, 15000);
+    if (progress.editing || (!force && Date.now() - progress.lastEdit < editGap - 200)) return;
     progress.editing = true;
     progress.lastEdit = Date.now();
-    const entries = formatConsoleActivity(progress.lines, escapeHtml);
-    const preview = progress.latest ? "\n\n<b>Latest response</b>\n" + escapeHtml(progress.latest.slice(0, 500)) : "";
-    const frame = venomPulse(progress.frame++);
+    const entries = formatVenomConsole(progress.lines, escapeHtml, theme);
+    const previewLength = venomThemeNumber(theme?.previewLength, 500, 100, 1500);
+    const preview = progress.latest ? "\n\n<b>" + escapeHtml(venomThemeText(theme?.transmissionTitle, VENOM_DEFAULTS.transmissionTitle)) + "</b>\n" + escapeHtml(progress.latest.slice(0, previewLength)) : "";
+    const frame = venomThemeFrame(progress.frame++, theme);
     const huntTime = formatHuntDuration(Date.now() - progress.started);
+    const header = venomThemeText(theme?.title, VENOM_DEFAULTS.title);
+    const section = venomThemeText(theme?.sectionTitle, VENOM_DEFAULTS.sectionTitle);
+    const divider = venomThemeText(theme?.divider, VENOM_DEFAULTS.divider, 48);
+    const footer = [
+      theme?.showOperations === false ? "" : progress.count + " operations",
+      theme?.showElapsed === false ? "" : venomThemeText(theme?.footerLabel, VENOM_DEFAULTS.footerLabel, 24) + " " + huntTime,
+    ].filter(Boolean).join(" · ");
     const html =
-      "<b>" + frame.eye + " VENOM // LETHAL PROTECTOR</b>\n" +
-      "<i>" + venomStatusLabel(progress.activity) + "</i>\n" +
-      "<code>" + frame.pulse + "</code>\n\n" +
-      "<b>THE HUNT // TERMINAL</b>\n" + entries +
-      (preview ? "\n" + preview.replace("<b>Latest response</b>", "<b>SYMBIOTE TRANSMISSION</b>") : "") +
-      "\n\n<i>" + progress.count + " operations · hunting " + huntTime + "</i>\n" +
-      "━━━━━━━━━━━━";
+      "<b>" + frame.eye + " " + escapeHtml(header) + "</b>\\n" +
+      "<i>" + escapeHtml(venomThemeLabel(progress.activity, theme)) + "</i>\\n" +
+      (theme?.showPulse === false || !frame.pulse ? "" : "<code>" + frame.pulse + "</code>\\n") +
+      "\\n<b>" + escapeHtml(section) + "</b>\\n" + entries +
+      (preview ? "\\n" + preview : "") +
+      (footer ? "\\n\\n<i>" + escapeHtml(footer) + "</i>" : "") +
+      "\\n" + escapeHtml(divider);
     try {
       // Keep edits serialized; an older animation frame must never overwrite
       // a newer tool event or the completed answer.
@@ -464,7 +474,7 @@ export function registerTelegramRenderer(
       // Telegram has no continually animated text format. Edit the existing
       // message on a bounded timer, including while a tool is blocking.
       if (progress.target) {
-        progressTimer = setInterval(() => { void updateProgress(); }, 2600);
+        progressTimer = setInterval(() => { void updateProgress(); }, venomThemeNumber(deps.getConfig().venomTheme?.animationIntervalMs, 2600, 1800, 15000));
         progressTimer.unref?.();
       }
     }
