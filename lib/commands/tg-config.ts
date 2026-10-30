@@ -154,3 +154,14 @@ export async function configSessionIsolationFlow(ui: MenuUi, deps: TgConfigDeps)
   await deps.persistConfig(next);
   ui.notify("Session routing set to " + nextValue, "info");
 }
+
+export async function configGroupJoinAlertsFlow(ui: MenuUi, deps: TgConfigDeps): Promise<void> {
+  const current = deps.getConfig().groupJoinAlerts !== false;
+  const values = ["on", "off"] as const;
+  const selected = await ui.select("DM me when Venom joins a new group", values.map(v => ((v === "on") === current ? "● " : "  ") + v));
+  if (!selected) return;
+  const next = { ...deps.getConfig(), groupJoinAlerts: selected.trim().endsWith("on") };
+  deps.setConfig(next);
+  await deps.persistConfig(next);
+  ui.notify("Group join alerts " + (next.groupJoinAlerts ? "enabled" : "disabled"), "info");
+}
