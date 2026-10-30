@@ -41,3 +41,20 @@ export function venomStatusLabel(activity: VenomActivity): string {
 export function venomPulse(index: number) {
   return VENOM_PULSE_FRAMES[((index % VENOM_PULSE_FRAMES.length) + VENOM_PULSE_FRAMES.length) % VENOM_PULSE_FRAMES.length];
 }
+
+/** Elapsed hunt time is wall-clock duration, not an estimate of completion. */
+export function formatHuntDuration(elapsedMs: number): string {
+  const totalSeconds = Math.max(0, Math.floor(Number.isFinite(elapsedMs) ? elapsedMs / 1000 : 0));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return hours > 0 ? `${hours}h ${minutes}m ${seconds}s`
+    : minutes > 0 ? `${minutes}m ${seconds}s`
+    : `${seconds}s`;
+}
+
+/** Actual tool summaries remain intact, rendered as compact terminal entries. */
+export function formatConsoleActivity(lines: readonly string[], escape: (value: string) => string): string {
+  if (lines.length === 0) return "<code>&gt; awaiting target…</code>";
+  return lines.slice(-3).map(line => "<code>&gt; " + escape(line) + "</code>").join("\n");
+}
