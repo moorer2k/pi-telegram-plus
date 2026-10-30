@@ -165,3 +165,19 @@ export async function configGroupJoinAlertsFlow(ui: MenuUi, deps: TgConfigDeps):
   await deps.persistConfig(next);
   ui.notify("Group join alerts " + (next.groupJoinAlerts ? "enabled" : "disabled"), "info");
 }
+
+/** Telegram website preview cards are disabled by default: edited progress
+ * messages otherwise show an expanding/vanishing card whenever a link appears. */
+export async function configLinkPreviewsFlow(ui: MenuUi, deps: TgConfigDeps): Promise<void> {
+  const enabled = deps.getConfig().linkPreviews === true;
+  const choices = ["off", "on"] as const;
+  const options = choices.map(v => (enabled === (v === "on") ? "● " : "  ") + v);
+  const selected = await ui.select("Website/file URL previews (progress always disables previews)", options);
+  if (!selected) return;
+  const value = choices[options.indexOf(selected)];
+  if (!value) return;
+  const next = { ...deps.getConfig(), linkPreviews: value === "on" };
+  deps.setConfig(next);
+  await deps.persistConfig(next);
+  ui.notify("Link previews " + value, "info");
+}
