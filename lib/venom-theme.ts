@@ -224,3 +224,22 @@ export function formatVenomFooter(
   }
   return parts.filter(Boolean).join(" · ");
 }
+
+/** Blacksite telemetry uses two complete lines, without decorative tail bars. */
+export function formatVenomTelemetry(
+  operations: number,
+  elapsedMs: number,
+  context: string | undefined,
+  modelName: string | undefined,
+  options?: VenomThemeOptions,
+): string {
+  if (venomPreset(options) !== "blacksite") return formatVenomFooter(operations, elapsedMs, context, modelName, options);
+  const first = [
+    options?.showOperations === false ? "" : Math.max(0, Math.floor(operations)) + " OPS",
+    context,
+    modelName ? venomThemeText(modelName, "", 55) : "",
+  ].filter(Boolean).join(" · ");
+  const second = options?.showElapsed === false ? "" :
+    "HUNT TIME " + formatHuntDuration(elapsedMs);
+  return [first, second].filter(Boolean).join("\n");
+}
