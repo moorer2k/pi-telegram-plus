@@ -49,6 +49,7 @@ export type ProjectTelegramBinding = {
   thinking?: TelegramRenderLevel;
   groupAccess?: TelegramGroupAccess;
   sessionIsolation?: TelegramSessionIsolation;
+  groupJoinAlerts?: boolean;
   /** Per-project runtime pref: retries for failed Telegram API calls (0 = no retry, default 3). Edited via /tg → Config, never written to the registry. */
   retryCount?: number;
   /** Confirmation policy for Telegram-originated shell commands. Defaults to "dangerous". */
