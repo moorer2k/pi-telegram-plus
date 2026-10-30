@@ -131,9 +131,12 @@ export type TelegramMessage = {
   voice?: TelegramDocument;
   animation?: TelegramDocument;
   sticker?: TelegramDocument;
-  chat?: { id?: number; type?: string };
+  chat?: { id?: number; type?: string; title?: string; username?: string };
   from?: { id?: number; is_bot?: boolean; username?: string; first_name?: string; last_name?: string };
   /** Telegram includes a shallow copy of the replied-to message. */
+  entities?: Array<{ type: string; offset: number; length: number }>;
+  caption_entities?: Array<{ type: string; offset: number; length: number }>;
+  new_chat_members?: Array<{ id?: number; is_bot?: boolean; username?: string }>;
   reply_to_message?: TelegramMessage;
   /** Selected text quote metadata for Telegram replies/quotes, when provided by Bot API. */
   quote?: TelegramTextQuote;
@@ -154,6 +157,11 @@ export type TelegramUpdate = {
   update_id: number;
   message?: TelegramMessage;
   callback_query?: TelegramCallbackQuery;
+  my_chat_member?: {
+    chat: { id: number; type: string; title?: string; username?: string };
+    new_chat_member: { status: string; user?: { id?: number; username?: string } };
+    old_chat_member?: { status: string };
+  };
 };
 
 export type TelegramButton = { text: string; value: string };
