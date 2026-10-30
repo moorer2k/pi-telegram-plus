@@ -9,7 +9,7 @@ import type { TgConfigDeps, SessionDeps } from "./register.ts";
 import type { BotRecord, BotRegistry, CapturedAgentSession, TelegramConfig } from "../types.ts";
 import { currentHostName } from "../tui/host.ts";
 import type { TuiHost } from "../tui-bridge.ts";
-import { configToolFlow, configThinkingFlow, configRetryFlow, configBashFlow, configGroupAccessFlow, configSessionIsolationFlow } from "./tg-config.ts";
+import { configToolFlow, configThinkingFlow, configRetryFlow, configBashFlow, configGroupAccessFlow, configSessionIsolationFlow, configGroupJoinAlertsFlow } from "./tg-config.ts";
 import { formatPairingInstructions } from "../pairing.ts";
 import { formatDebugReport } from "./info.ts";
 import {
@@ -436,6 +436,7 @@ export function buildConfigMenuOptions(
     `🐚 Shell confirm: ${config.bashConfirm ?? "dangerous"}`,
     `👥 Group access: ${config.groupAccess ?? "owner-mentions"}`,
     `🔒 Chat sessions: ${config.sessionIsolation ?? "shared"}`,
+    `🔔 Group join alerts: ${config.groupJoinAlerts === false ? "off" : "on"}`,
     BACK_LABEL,
   ];
 }
@@ -470,6 +471,8 @@ async function configMenu(ui: MenuUi, configDeps: TgConfigDeps, sessionDeps?: Se
       await configGroupAccessFlow(ui, configDeps);
     } else if (choice.startsWith("🔒 Chat sessions:")) {
       await configSessionIsolationFlow(ui, configDeps);
+    } else if (choice.startsWith("🔔 Group join alerts:")) {
+      await configGroupJoinAlertsFlow(ui, configDeps);
     }
   }
 }
