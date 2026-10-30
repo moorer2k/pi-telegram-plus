@@ -5,6 +5,9 @@ export type TelegramRenderLevel = "hidden" | "brief" | "progress" | "full";
 export const RENDER_LEVELS: readonly TelegramRenderLevel[] = ["hidden", "brief", "progress", "full"] as const;
 
 /** Confirmation policy for Telegram-originated `!`/`!!` shell commands. */
+export type TelegramGroupAccess = "disabled" | "owner-mentions" | "public-mentions";
+export type TelegramSessionIsolation = "shared" | "per-chat";
+
 export type TelegramBashConfirm = "always" | "dangerous" | "never";
 export const BASH_CONFIRM_MODES: readonly TelegramBashConfirm[] = ["always", "dangerous", "never"] as const;
 
@@ -44,6 +47,8 @@ export type ProjectTelegramBinding = {
   enabled?: boolean;
   tool?: TelegramRenderLevel;
   thinking?: TelegramRenderLevel;
+  groupAccess?: TelegramGroupAccess;
+  sessionIsolation?: TelegramSessionIsolation;
   /** Per-project runtime pref: retries for failed Telegram API calls (0 = no retry, default 3). Edited via /tg → Config, never written to the registry. */
   retryCount?: number;
   /** Confirmation policy for Telegram-originated shell commands. Defaults to "dangerous". */
