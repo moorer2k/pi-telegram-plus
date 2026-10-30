@@ -141,8 +141,8 @@ export function venomToolTag(toolName: string, args: unknown, isError = false): 
   const name = toolName.toLowerCase();
   const data = args && typeof args === "object" ? args as Record<string, unknown> : {};
   const command = typeof data.command === "string" ? data.command : "";
-  if (/\\b(?:npm|pnpm|yarn|bun)\\s+(?:run\\s+)?(?:test|check|lint|typecheck)\\b|\\b(?:pytest|vitest|jest|go test|cargo test|phpunit)\\b/i.test(command)) return "VERIFY";
-  if (/\\b(?:rg|grep|find|git log|git grep)\\b/i.test(command) || name === "grep" || name === "search") return "RECON";
+  if (/\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:test|check|lint|typecheck)\b|\b(?:pytest|vitest|jest|go test|cargo test|phpunit)\b/i.test(command)) return "VERIFY";
+  if (/\b(?:rg|grep|find|git log|git grep)\b/i.test(command) || name === "grep" || name === "search") return "RECON";
   if (name === "read" || name === "view") return "READ";
   if (name === "edit" || name === "write" || name === "apply_patch") return "PATCH";
   if (name === "bash" || name === "exec" || name === "terminal") return "EXEC";
@@ -153,7 +153,7 @@ export function venomToolTag(toolName: string, args: unknown, isError = false): 
 export function venomToolLine(toolName: string, args: unknown, brief: string, options?: VenomThemeOptions, isError = false): string {
   if (venomPreset(options) === "lethal-protector") return brief;
   const tag = venomToolTag(toolName, args, isError);
-  const source = brief.replace(/^\\S+\\s*:\\s*/, "").trim();
+  const source = brief.replace(/^\S+\s*:\s*/, "").trim();
   return "[" + tag + "] " + source;
 }
 
