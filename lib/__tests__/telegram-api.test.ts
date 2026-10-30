@@ -160,6 +160,24 @@ describe("createTelegramTransport — network-failure suppression & logging", ()
     });
   });
 
+  it("disables temporary URL previews on progress edits and ordinary sends by default", async () => {
+    const calls: Array<{ method: string; body: Record<string, unknown> }> = [];
+    globalThis.fetch = vi.fn(async (url: string, init: RequestInit) => {
+      calls.push({ method: url.split("/").pop()!, body: JSON.parse(init.body as string) });
+      return telegramResponse(true, { message_id: 5 });
+    }) as unknown as FetchImpl;
+    const { transport, setConfig } = makeTransport();
+    await transport.sendText(1, "https://example.com/file.zip");
+    await transport.editText(1, 5, "https://example.com/file.zip");
+    expect(calls[0].body.link_preview_options).toEqual({ is_disabled: true });
+    expect(calls[1].body.link_preview_options).toEqual({ is_disabled: true });
+    setConfig({ botToken: "tok", retryCount: 0, linkPreviews: true });
+    await transport.sendText(1, "https://example.com");
+    await transport.editText(1, 5, "https://example.com");
+    expect(calls[2].body.link_preview_options).toEqual({ is_disabled: false });
+    expect(calls[3].body.link_preview_options).toEqual({ is_disabled: true });
+  });
+
   it("sendChatAction targets the configured apiBase instead of the public endpoint", async () => {
     const urls: string[] = [];
     const stub = vi.fn(async (url: string) => {
