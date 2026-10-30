@@ -1,7 +1,7 @@
 import type { TgConfigDeps } from "./register.ts";
 import type { MenuUi } from "./telegram-commands.ts";
 import type { VenomThemeOptions } from "../types.ts";
-import { VENOM_DEFAULTS, venomStatusLabel, venomThemeNumber, venomThemeText, venomPreset, VENOM_PRESETS, type VenomThemePreset, type VenomActivity } from "../venom-theme.ts";
+import { VENOM_DEFAULTS, venomStatusLabel, venomThemeNumber, venomThemeText, venomThemeLabel, venomPreset, venomSectionTitle, venomTransmissionTitle, VENOM_PRESETS, type VenomThemePreset, type VenomActivity } from "../venom-theme.ts";
 
 type TextKey = "title" | "sectionTitle" | "transmissionTitle" | "footerLabel" | "consolePrefix" | "awaitingText";
 const textFields: Array<[TextKey, string, number]> = [
@@ -29,8 +29,8 @@ function valueLabel(label: string, value: string): string {
 export async function configVenomThemeFlow(ui: MenuUi, deps: TgConfigDeps): Promise<void> {
   while (true) {
     const theme = deps.getConfig().venomTheme ?? {};
-    const entries = textFields.map(([key, label]) => valueLabel(label, venomThemeText(theme[key], defaults[key])));
-    const statuses = activities.map(key => valueLabel(venomStatusLabel(key), venomThemeText(theme.labels?.[key], venomStatusLabel(key), 48)));
+    const entries = textFields.map(([key, label]) => valueLabel(label, key === "sectionTitle" ? venomSectionTitle(theme) : key === "transmissionTitle" ? venomTransmissionTitle(theme) : venomThemeText(theme[key], defaults[key])));
+    const statuses = activities.map(key => valueLabel(venomStatusLabel(key), venomThemeLabel(key, theme)));
     const options = [
       "Preset: " + venomPreset(theme),
       "Text and headings",
@@ -62,7 +62,7 @@ export async function configVenomThemeFlow(ui: MenuUi, deps: TgConfigDeps): Prom
       const idx = entries.indexOf(selected);
       if (idx < 0) continue;
       const [key, label, max] = textFields[idx];
-      const current = venomThemeText(theme[key], defaults[key]);
+      const current = key === "sectionTitle" ? venomSectionTitle(theme) : key === "transmissionTitle" ? venomTransmissionTitle(theme) : venomThemeText(theme[key], defaults[key]);
       const input = await ui.input(label + " (max " + max + " characters; blank resets)", current);
       if (input === undefined) continue;
       const updated = { ...theme };
@@ -75,7 +75,7 @@ export async function configVenomThemeFlow(ui: MenuUi, deps: TgConfigDeps): Prom
       const idx = statuses.indexOf(selected);
       if (idx < 0) continue;
       const key = activities[idx];
-      const current = venomThemeText(theme.labels?.[key], venomStatusLabel(key), 48);
+      const current = venomThemeLabel(key, theme);
       const input = await ui.input("Activity label (blank resets)", current);
       if (input === undefined) continue;
       const labels = { ...theme.labels };
