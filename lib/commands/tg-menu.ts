@@ -10,6 +10,7 @@ import type { BotRecord, BotRegistry, CapturedAgentSession, TelegramConfig } fro
 import { currentHostName } from "../tui/host.ts";
 import type { TuiHost } from "../tui-bridge.ts";
 import { configVenomThemeFlow } from "./tg-venom-theme.ts";
+import { configVenomPhrasesFlow } from "./tg-venom-phrases.ts";
 import { getCurrentTelegramTurn } from "../turn-context.ts";
 import { checkpointCurrentUpdateCursor } from "../polling.ts";
 import { updateAndRestartVenom, getMaintenanceService } from "../maintenance.ts";
@@ -203,7 +204,7 @@ async function mainMenu(
       try {
         // Checkpoint the Telegram callback before process termination.
         await checkpointCurrentUpdateCursor();
-        await updateAndRestartVenom(turn.chatId, botId, deps.transport);
+        await updateAndRestartVenom(turn.chatId, botId, deps.transport, deps.getConfig().venomRestartPhrases);
         throw new MenuClosed();
       } catch (error) {
         if (error instanceof MenuClosed) throw error;
@@ -472,6 +473,7 @@ export function buildConfigMenuOptions(
     `🔒 Chat sessions: ${config.sessionIsolation ?? "shared"}`,
     `🔔 Group join alerts: ${config.groupJoinAlerts === false ? "off" : "on"}`,
     "Venom appearance",
+    "Venom restart phrases",
     BACK_LABEL,
   ];
 }
@@ -510,6 +512,8 @@ async function configMenu(ui: MenuUi, configDeps: TgConfigDeps, sessionDeps?: Se
       await configGroupJoinAlertsFlow(ui, configDeps);
     } else if (choice === "Venom appearance") {
       await configVenomThemeFlow(ui, configDeps);
+    } else if (choice === "Venom restart phrases") {
+      await configVenomPhrasesFlow(ui, configDeps);
     }
   }
 }
