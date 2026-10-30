@@ -98,7 +98,7 @@ describe("Venom Lethal Protector presentation", () => {
 
   it("uses a complete two-line telemetry footer for Blacksite", () => {
     expect(formatVenomTelemetry(3, 90_000, "21.8% / 98k", "qwen3.5-27b", { preset: "blacksite" }))
-      .toBe("3 OPS · 21.8% / 98k · qwen3.5-27b\\nHUNT TIME 1m 30s".replace("\\\\n", "\\n"));
+      .toBe("3 OPS · 21.8% / 98k · qwen3.5-27b\nHUNT TIME 1m 30s");
     expect(formatVenomTelemetry(3, 90_000, undefined, undefined, { preset: "blacksite", showElapsed: false }))
       .toBe("3 OPS");
     expect(venomCompletionLabel(false, { preset: "blacksite" })).toBe("HUNT COMPLETE // UNVERIFIED");
