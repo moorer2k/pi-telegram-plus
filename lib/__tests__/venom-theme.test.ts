@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { VENOM_PULSE_FRAMES, venomActivity, venomPulse, venomStatusLabel, formatHuntDuration, formatConsoleActivity, formatVenomConsole, venomThemeFrame, venomThemeLabel, venomThemeText, venomThemeNumber, formatVenomContextUsage, formatVenomFooter, venomPreset, VENOM_PRESETS, venomSectionTitle, venomTransmissionTitle, venomToolLine, venomToolTag, formatVenomTelemetry, venomCompletionLabel } from "../venom-theme.ts";
+import { VENOM_PULSE_FRAMES, venomActivity, venomPulse, venomStatusLabel, formatHuntDuration, formatConsoleActivity, formatVenomConsole, venomThemeFrame, venomThemeLabel, venomThemeText, venomThemeNumber, formatVenomContextUsage, formatVenomFooter, venomPreset, VENOM_PRESETS, venomSectionTitle, venomTransmissionTitle, venomToolLine, venomToolTag, formatVenomTelemetry, formatVenomTerminalBlock, venomCompletionLabel } from "../venom-theme.ts";
 
 describe("Venom Lethal Protector presentation", () => {
   it("cycles through symbiote pulse frames without reporting fictional completion", () => {
@@ -102,6 +102,13 @@ describe("Venom Lethal Protector presentation", () => {
     expect(formatVenomTelemetry(3, 90_000, undefined, undefined, { preset: "blacksite", showElapsed: false }))
       .toBe("3 OPS");
     expect(venomCompletionLabel(false, { preset: "blacksite" })).toBe("HUNT COMPLETE // UNVERIFIED");
+  });
+
+  it("wraps already escaped tactical logs in one Telegram native pre block", () => {
+    const lines = "<code>&gt; [READ] lib/a.ts</code>\\n<code>&gt; [VERIFY] npm test &amp;&amp; echo ok</code>";
+    expect(formatVenomTerminalBlock(lines))
+      .toBe("<pre>&gt; [READ] lib/a.ts\\n&gt; [VERIFY] npm test &amp;&amp; echo ok</pre>");
+    expect(formatVenomTerminalBlock("<code>safe</code>")).toBe("<pre>safe</pre>");
   });
 
   it("uses Lethal Protector state language", () => {

@@ -63,3 +63,9 @@ The preset selector updates preset-controlled headings and activity labels, whil
 To choose Blacksite by editing `.pi/telegram.json` directly, set `venomTheme.preset` to `"blacksite"` and remove existing `venomTheme.sectionTitle`, `venomTheme.transmissionTitle` and `venomTheme.labels` if those older overrides would hide Blacksite terminology. The in-app preset selector performs those replacements automatically.
 
 Tool labels describe observed operations, never fictional stages. The animated pulse indicates activity only, not task completion. No actual Telegram bubble color can be changed by a bot. A completion label marked verified is not shown unless execution evidence supports that claim.
+
+## Telegram-native Blacksite formatting
+
+Blacksite now uses Telegram's native HTML formatting for visual hierarchy: bold header and active status, underlined terminal heading, a single preformatted monospace tool block, a native blockquote around the current assistant transmission, and compact inline-code/italic telemetry. No color or client theme override is attempted. Plain Lethal Protector and Minimal Terminal retain their existing output.
+
+Progress updates remain edits of the existing Telegram message. All dynamic tool and assistant content is HTML-escaped before insertion, link preview behavior is unchanged, and existing theme settings require no migration.

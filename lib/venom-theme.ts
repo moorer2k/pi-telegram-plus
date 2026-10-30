@@ -243,3 +243,8 @@ export function formatVenomTelemetry(
     "HUNT TIME " + formatHuntDuration(elapsedMs);
   return [first, second].filter(Boolean).join("\n");
 }
+
+/** Wrap HTML-escaped console lines in one native Telegram code block. */
+export function formatVenomTerminalBlock(escapedInlineCode: string): string {
+  return "<pre>" + escapedInlineCode.replaceAll("<code>", "").replaceAll("</code>", "") + "</pre>";
+}
