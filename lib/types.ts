@@ -1,10 +1,13 @@
 import type { AgentSession, ExtensionUIContext } from "@earendil-works/pi-coding-agent";
 
-export type TelegramRenderLevel = "hidden" | "brief" | "full";
+export type TelegramRenderLevel = "hidden" | "brief" | "progress" | "full";
 
-export const RENDER_LEVELS: readonly TelegramRenderLevel[] = ["hidden", "brief", "full"] as const;
+export const RENDER_LEVELS: readonly TelegramRenderLevel[] = ["hidden", "brief", "progress", "full"] as const;
 
 /** Confirmation policy for Telegram-originated `!`/`!!` shell commands. */
+export type TelegramGroupAccess = "disabled" | "owner-mentions" | "public-mentions";
+export type TelegramSessionIsolation = "shared" | "per-chat";
+
 export type TelegramBashConfirm = "always" | "dangerous" | "never";
 export const BASH_CONFIRM_MODES: readonly TelegramBashConfirm[] = ["always", "dangerous", "never"] as const;
 
@@ -44,6 +47,9 @@ export type ProjectTelegramBinding = {
   enabled?: boolean;
   tool?: TelegramRenderLevel;
   thinking?: TelegramRenderLevel;
+  groupAccess?: TelegramGroupAccess;
+  sessionIsolation?: TelegramSessionIsolation;
+  groupJoinAlerts?: boolean;
   /** Per-project runtime pref: retries for failed Telegram API calls (0 = no retry, default 3). Edited via /tg → Config, never written to the registry. */
   retryCount?: number;
   /** Confirmation policy for Telegram-originated shell commands. Defaults to "dangerous". */
@@ -131,9 +137,12 @@ export type TelegramMessage = {
   voice?: TelegramDocument;
   animation?: TelegramDocument;
   sticker?: TelegramDocument;
-  chat?: { id?: number; type?: string };
+  chat?: { id?: number; type?: string; title?: string; username?: string };
   from?: { id?: number; is_bot?: boolean; username?: string; first_name?: string; last_name?: string };
   /** Telegram includes a shallow copy of the replied-to message. */
+  entities?: Array<{ type: string; offset: number; length: number }>;
+  caption_entities?: Array<{ type: string; offset: number; length: number }>;
+  new_chat_members?: Array<{ id?: number; is_bot?: boolean; username?: string }>;
   reply_to_message?: TelegramMessage;
   /** Selected text quote metadata for Telegram replies/quotes, when provided by Bot API. */
   quote?: TelegramTextQuote;
@@ -154,6 +163,11 @@ export type TelegramUpdate = {
   update_id: number;
   message?: TelegramMessage;
   callback_query?: TelegramCallbackQuery;
+  my_chat_member?: {
+    chat: { id: number; type: string; title?: string; username?: string };
+    new_chat_member: { status: string; user?: { id?: number; username?: string } };
+    old_chat_member?: { status: string };
+  };
 };
 
 export type TelegramButton = { text: string; value: string };

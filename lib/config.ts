@@ -275,6 +275,9 @@ export function materializeTelegramConfig(
     }
     if (binding.tool !== undefined) config.tool = binding.tool;
     if (binding.thinking !== undefined) config.thinking = binding.thinking;
+    if (binding.groupAccess !== undefined) config.groupAccess = binding.groupAccess;
+    if (binding.sessionIsolation !== undefined) config.sessionIsolation = binding.sessionIsolation;
+    if (binding.groupJoinAlerts !== undefined) config.groupJoinAlerts = binding.groupJoinAlerts;
     if (binding.retryCount !== undefined) config.retryCount = binding.retryCount;
     if (binding.bashConfirm !== undefined) config.bashConfirm = binding.bashConfirm;
     if (binding.lastUpdateId !== undefined) config.lastUpdateId = binding.lastUpdateId;
@@ -342,6 +345,9 @@ export async function persistProjectRuntimeState(
     }
     if (config.tool !== undefined) binding.tool = config.tool;
     if (config.thinking !== undefined) binding.thinking = config.thinking;
+    if (config.groupAccess !== undefined) binding.groupAccess = config.groupAccess;
+    if (config.sessionIsolation !== undefined) binding.sessionIsolation = config.sessionIsolation;
+    if (config.groupJoinAlerts !== undefined) binding.groupJoinAlerts = config.groupJoinAlerts;
     if (config.retryCount !== undefined) binding.retryCount = config.retryCount;
     if (config.bashConfirm !== undefined) binding.bashConfirm = config.bashConfirm;
 
@@ -387,6 +393,9 @@ export function preserveInMemoryRuntimeState(
       : {}),
     ...(persisted.tool === undefined && memory.tool !== undefined ? { tool: memory.tool } : {}),
     ...(persisted.thinking === undefined && memory.thinking !== undefined ? { thinking: memory.thinking } : {}),
+    ...(persisted.groupAccess === undefined && memory.groupAccess !== undefined ? { groupAccess: memory.groupAccess } : {}),
+    ...(persisted.sessionIsolation === undefined && memory.sessionIsolation !== undefined ? { sessionIsolation: memory.sessionIsolation } : {}),
+    ...(persisted.groupJoinAlerts === undefined && memory.groupJoinAlerts !== undefined ? { groupJoinAlerts: memory.groupJoinAlerts } : {}),
     ...(persisted.retryCount === undefined && memory.retryCount !== undefined
       ? { retryCount: memory.retryCount }
       : {}),

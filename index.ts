@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { notifyNewGroupOnce } from "./lib/group-notices.ts";
 import { mkdir, writeFile } from "node:fs/promises";
 import { extname, join, resolve } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -439,6 +440,15 @@ export default function piTelegramPlus(rawPi: ExtensionAPI): void {
     shouldProcess: isActiveInstance,
     handleUpdate: async (update) => {
       refreshStatus();
+      if (update.my_chat_member && config.groupJoinAlerts !== false) {
+        await notifyNewGroupOnce(update.my_chat_member, {
+          ownerId: config.allowedUserId,
+          botId: resolvedConfig?.bot?.id,
+          sendNotice: async (ownerId, html) => {
+            await transport.sendText(ownerId, html);
+          },
+        }).catch(err => indexLog.warn("Telegram group join notice failed", { err }));
+      }
       if (update.callback_query) await controller.handleCallbackQuery(update.callback_query);
       if (update.message) await controller.handleMessage(update.message);
       lastStatusError = undefined;
