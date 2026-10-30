@@ -1,0 +1,108 @@
+import type { TgConfigDeps } from "./register.ts";
+import type { MenuUi } from "./telegram-commands.ts";
+import type { VenomThemeOptions } from "../types.ts";
+import { VENOM_DEFAULTS, venomStatusLabel, venomThemeNumber, venomThemeText, type VenomActivity } from "../venom-theme.ts";
+
+type TextKey = "title" | "sectionTitle" | "transmissionTitle" | "footerLabel" | "consolePrefix" | "divider" | "awaitingText";
+const textFields: Array<[TextKey, string, number]> = [
+  ["title", "Bot title", 72],
+  ["sectionTitle", "Console heading", 72],
+  ["transmissionTitle", "Transmission heading", 72],
+  ["footerLabel", "Elapsed-time label", 24],
+  ["consolePrefix", "Terminal prompt", 8],
+  ["divider", "Divider", 48],
+  ["awaitingText", "Waiting text", 72],
+];
+const activities: VenomActivity[] = ["awakening", "tracking", "examining", "testing", "adapting", "hunting"];
+const BACK = "Back";
+const defaults = VENOM_DEFAULTS;
+
+async function save(deps: TgConfigDeps, theme: VenomThemeOptions): Promise<void> {
+  const next = { ...deps.getConfig(), venomTheme: theme };
+  deps.setConfig(next);
+  await deps.persistConfig(next);
+}
+
+function valueLabel(label: string, value: string): string {
+  return label + ": " + (value.length > 38 ? value.slice(0, 37) + "…" : value);
+}
+
+export async function configVenomThemeFlow(ui: MenuUi, deps: TgConfigDeps): Promise<void> {
+  while (true) {
+    const theme = deps.getConfig().venomTheme ?? {};
+    const entries = textFields.map(([key, label]) => valueLabel(label, venomThemeText(theme[key], defaults[key])));
+    const statuses = activities.map(key => valueLabel(venomStatusLabel(key), venomThemeText(theme.labels?.[key], venomStatusLabel(key), 48)));
+    const options = [
+      "Text and headings",
+      "Activity names",
+      "Animation: " + (theme.animation ?? "symbiote"),
+      "Pulse visibility: " + (theme.showPulse === false ? "off" : "on"),
+      "Animation interval: " + venomThemeNumber(theme.animationIntervalMs, 2600, 1800, 15000) + "ms",
+      "Console entries: " + venomThemeNumber(theme.visibleOperations, 3, 1, 8),
+      "Preview characters: " + venomThemeNumber(theme.previewLength, 500, 100, 1500),
+      "Show operation count: " + (theme.showOperations === false ? "off" : "on"),
+      "Show hunting time: " + (theme.showElapsed === false ? "off" : "on"),
+      "Reset Venom appearance",
+      BACK,
+    ];
+    const choice = await ui.select("Venom appearance", options);
+    if (!choice || choice === BACK) return;
+    if (choice === options[0]) {
+      const selected = await ui.select("Edit Venom text", [...entries, BACK]);
+      if (!selected || selected === BACK) continue;
+      const idx = entries.indexOf(selected);
+      if (idx < 0) continue;
+      const [key, label, max] = textFields[idx];
+      const current = venomThemeText(theme[key], defaults[key]);
+      const input = await ui.input(label + " (max " + max + " characters; blank resets)", current);
+      if (input === undefined) continue;
+      const updated = { ...theme };
+      if (!input.trim()) delete updated[key];
+      else updated[key] = venomThemeText(input, defaults[key], max);
+      await save(deps, updated);
+    } else if (choice === options[1]) {
+      const selected = await ui.select("Edit activity wording", [...statuses, BACK]);
+      if (!selected || selected === BACK) continue;
+      const idx = statuses.indexOf(selected);
+      if (idx < 0) continue;
+      const key = activities[idx];
+      const current = venomThemeText(theme.labels?.[key], venomStatusLabel(key), 48);
+      const input = await ui.input("Activity label (blank resets)", current);
+      if (input === undefined) continue;
+      const labels = { ...theme.labels };
+      if (!input.trim()) delete labels[key];
+      else labels[key] = venomThemeText(input, venomStatusLabel(key), 48);
+      await save(deps, { ...theme, labels });
+    } else if (choice === options[2]) {
+      const choices = ["symbiote", "spinner", "static"] as const;
+      const selected = await ui.select("Animation style", [...choices]);
+      if (selected && choices.some(v => v === selected)) {
+        await save(deps, { ...theme, animation: selected as typeof choices[number] });
+      }
+    } else if (choice === options[3]) {
+      await save(deps, { ...theme, showPulse: theme.showPulse === false });
+    } else if (choice === options[4] || choice === options[5] || choice === options[6]) {
+      const isInterval = choice === options[4];
+      const isCount = choice === options[5];
+      const key = isInterval ? "animationIntervalMs" : isCount ? "visibleOperations" : "previewLength";
+      const [min, max, initial] = isInterval ? [1800, 15000, 2600] : isCount ? [1, 8, 3] : [100, 1500, 500];
+      const input = await ui.input(key + " (" + min + " to " + max + ")", String(venomThemeNumber(theme[key], initial, min, max)));
+      if (input === undefined) continue;
+      const n = Number(input.trim());
+      if (!Number.isInteger(n) || n < min || n > max) {
+        ui.notify("Enter an integer between " + min + " and " + max, "error");
+        continue;
+      }
+      await save(deps, { ...theme, [key]: n });
+    } else if (choice === options[7]) {
+      await save(deps, { ...theme, showOperations: theme.showOperations === false });
+    } else if (choice === options[8]) {
+      await save(deps, { ...theme, showElapsed: theme.showElapsed === false });
+    } else if (choice === options[9]) {
+      if (await ui.confirm("Reset Venom appearance?", "Restore all default theme labels, animations and layout settings?")) {
+        await save(deps, {});
+        ui.notify("Venom appearance reset", "info");
+      }
+    }
+  }
+}
