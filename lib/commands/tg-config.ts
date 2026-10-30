@@ -1,5 +1,5 @@
 import type { TgConfigDeps } from "./register.ts";
-import type { TelegramBashConfirm, TelegramConfig, TelegramRenderLevel } from "../types.ts";
+import type { TelegramBashConfirm, TelegramConfig, TelegramRenderLevel, TelegramGroupAccess, TelegramSessionIsolation } from "../types.ts";
 import { BASH_CONFIRM_MODES, RENDER_LEVELS } from "../types.ts";
 import type { MenuUi } from "./telegram-commands.ts";
 
@@ -112,4 +112,45 @@ async function pickRenderLevel(ui: MenuUi, title: string, current: TelegramRende
   const idx = labels.indexOf(choice);
   if (idx < 0 || idx >= RENDER_LEVELS.length) return undefined;
   return RENDER_LEVELS[idx];
+}
+export async function configGroupAccessFlow(ui: MenuUi, deps: TgConfigDeps): Promise<void> {
+  const current = deps.getConfig().groupAccess ?? "owner-mentions";
+  const values: TelegramGroupAccess[] = ["disabled", "owner-mentions", "public-mentions"];
+  const labels = values.map(v => (v === current ? "● " : "  ") + v);
+  const selected = await ui.select("Group access", labels);
+  if (!selected) return;
+  const nextValue = values[labels.indexOf(selected)];
+  if (!nextValue) return;
+  if (nextValue === "public-mentions") {
+    const allowed = await ui.confirm(
+      "Enable public group mentions?",
+      "Other members can prompt the SAME Pi session, which can expose private context or access tools. Use only in trusted groups."
+    );
+    if (!allowed) return;
+  }
+  const next = { ...deps.getConfig(), groupAccess: nextValue };
+  deps.setConfig(next);
+  await deps.persistConfig(next);
+  ui.notify("Group access set to " + nextValue, "info");
+}
+
+export async function configSessionIsolationFlow(ui: MenuUi, deps: TgConfigDeps): Promise<void> {
+  const current = deps.getConfig().sessionIsolation ?? "shared";
+  const values: TelegramSessionIsolation[] = ["shared", "per-chat"];
+  const labels = values.map(v => (v === current ? "● " : "  ") + v);
+  const selected = await ui.select("Chat session routing", labels);
+  if (!selected) return;
+  const nextValue = values[labels.indexOf(selected)];
+  if (!nextValue) return;
+  if (nextValue === "per-chat") {
+    const confirmed = await ui.confirm(
+      "Enable strict isolation gate?",
+      "Per-chat session creation is not implemented yet. Group prompts will be blocked rather than share the owner session. Private-chat use remains unchanged."
+    );
+    if (!confirmed) return;
+  }
+  const next = { ...deps.getConfig(), sessionIsolation: nextValue };
+  deps.setConfig(next);
+  await deps.persistConfig(next);
+  ui.notify("Session routing set to " + nextValue, "info");
 }
