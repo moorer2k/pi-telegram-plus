@@ -19,6 +19,38 @@ describe("public group mentions", () => {
     expect(isGroupMentionAllowed({ ...msg("@pi3090_bot hi"), entities: [] }, "pi3090_bot")).toBe(false);
     expect(isGroupMentionAllowed({ ...msg("@pi3090_bot hi"), chat: { id: 1, type: "private" } }, "pi3090_bot")).toBe(false);
   });
+  it("recognizes explicit commands addressed to this bot, not another bot", () => {
+    const command = {
+      ...msg("/help@pi3090_bot", "pi3090_bot"),
+      entities: [{ type: "bot_command", offset: 0, length: "/help@pi3090_bot".length }],
+    };
+    expect(isGroupMentionAllowed(command, "pi3090_bot")).toBe(true);
+    expect(isGroupMentionAllowed(command, "other_bot")).toBe(false);
+    expect(stripBotMention("/help@pi3090_bot", "pi3090_bot")).toBe("/help");
+  });
+  it("accepts bot replies but rejects forged/non-bot replies", () => {
+    const replied = {
+      ...msg("What about this?", "pi3090_bot"),
+      entities: [],
+      reply_to_message: { message_id: 22, from: { id: 999, username: "pi3090_bot", is_bot: true } },
+    };
+    expect(isGroupMentionAllowed(replied, "pi3090_bot")).toBe(true);
+    expect(isGroupMentionAllowed({ ...replied, reply_to_message: { ...replied.reply_to_message, from: { id: 999, username: "pi3090_bot", is_bot: false } } }, "pi3090_bot")).toBe(false);
+    expect(isGroupMentionAllowed(replied, "other_bot")).toBe(false);
+  });
+  it("supports text_mention only when Telegram identifies this bot", () => {
+    const m = {
+      ...msg("Venom explain", "pi3090_bot"),
+      entities: [{ type: "text_mention", offset: 0, length: 5, user: { id: 999, username: "pi3090_bot", is_bot: true } }],
+    };
+    expect(isGroupMentionAllowed(m, "pi3090_bot")).toBe(true);
+    expect(isGroupMentionAllowed({ ...m, entities: [{ ...m.entities[0], user: { ...m.entities[0].user, username: "somebody_else" } }] }, "pi3090_bot")).toBe(false);
+  });
+  it("recognizes caption mentions while excluding bot messages", () => {
+    const m = { ...msg("", "pi3090_bot"), text: undefined, caption: "@pi3090_bot see this", caption_entities: [{ type: "mention", offset: 0, length: 12 }] };
+    expect(isGroupMentionAllowed(m, "pi3090_bot")).toBe(true);
+    expect(isGroupMentionAllowed({ ...m, from: { id: 44, is_bot: true } }, "pi3090_bot")).toBe(false);
+  });
   it("removes only bot mention, preserves remaining request", () => {
     expect(stripBotMention("@pi3090_bot check this", "pi3090_bot")).toBe("check this");
   });
