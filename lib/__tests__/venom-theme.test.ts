@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { VENOM_PULSE_FRAMES, venomActivity, venomPulse, venomStatusLabel, formatHuntDuration, formatConsoleActivity } from "../venom-theme.ts";
+import { VENOM_PULSE_FRAMES, venomActivity, venomPulse, venomStatusLabel, formatHuntDuration, formatConsoleActivity, formatVenomConsole, venomThemeFrame, venomThemeLabel, venomThemeText, venomThemeNumber } from "../venom-theme.ts";
 
 describe("Venom Lethal Protector presentation", () => {
   it("cycles through symbiote pulse frames without reporting fictional completion", () => {
@@ -32,6 +32,25 @@ describe("Venom Lethal Protector presentation", () => {
     expect(entries.split("\n")).toHaveLength(3);
     expect(entries).not.toContain("•");
     expect(formatConsoleActivity([], value => value)).toContain("awaiting target");
+  });
+
+  it("accepts custom names and display options while retaining safe defaults", () => {
+    expect(venomThemeLabel("tracking", { labels: { tracking: "Following the Scent" } })).toBe("Following the Scent");
+    expect(venomThemeLabel("tracking")).toBe("Tracking");
+    expect(venomThemeFrame(0, { animation: "static" })).toEqual({ eye: "◆", pulse: "" });
+    expect(venomThemeFrame(0, { animation: "spinner" }).pulse).toBe("");
+    expect(venomThemeText("<b>Unsafe</b>", "Fallback")).toBe("b Unsafe /b");
+    expect(venomThemeText("   ", "Fallback")).toBe("Fallback");
+    expect(venomThemeNumber(100, 2600, 1800, 15000)).toBe(1800);
+    expect(venomThemeNumber(18000, 2600, 1800, 15000)).toBe(15000);
+  });
+
+  it("configures terminal prefix and number of visible operations", () => {
+    const lines = ["read /a", "read /b", "bash npm test"];
+    const output = formatVenomConsole(lines, x => x, { consolePrefix: "$", visibleOperations: 2 });
+    expect(output).toContain("$ read /b");
+    expect(output).toContain("$ bash npm test");
+    expect(output).not.toContain("read /a");
   });
 
   it("uses Lethal Protector state language", () => {
