@@ -82,8 +82,89 @@ export function venomThemeNumber(value: unknown, fallback: number, min: number, 
     : fallback;
 }
 
+export type VenomThemePreset = NonNullable<VenomThemeOptions["preset"]>;
+
+export const VENOM_PRESETS = {
+  "lethal-protector": {
+    sectionTitle: "THE HUNT // TERMINAL",
+    transmissionTitle: "SYMBIOTE TRANSMISSION",
+    labels: {
+      awakening: "Awakening",
+      tracking: "Tracking",
+      examining: "Examining the Target",
+      testing: "Testing the Prey",
+      adapting: "Adapting",
+      hunting: "On the Hunt",
+    },
+  },
+  blacksite: {
+    sectionTitle: "[ SYMBIOTE TERMINAL ]",
+    transmissionTitle: "[ NEURAL LINK ]",
+    labels: {
+      awakening: "SYMBIOTE ONLINE",
+      tracking: "TARGET ACQUIRED",
+      examining: "DEEP RECON",
+      testing: "VALIDATING TARGET",
+      adapting: "SYMBIOTE ADAPTING",
+      hunting: "ACTIVE HUNT",
+    },
+  },
+  "minimal-terminal": {
+    sectionTitle: "TERMINAL",
+    transmissionTitle: "RESPONSE",
+    labels: {
+      awakening: "Starting",
+      tracking: "Searching",
+      examining: "Reading",
+      testing: "Testing",
+      adapting: "Retrying",
+      hunting: "Working",
+    },
+  },
+} satisfies Record<VenomThemePreset, { sectionTitle: string; transmissionTitle: string; labels: Record<VenomActivity, string> }>;
+
+export function venomPreset(options?: VenomThemeOptions): VenomThemePreset {
+  const key = options?.preset;
+  return key && Object.prototype.hasOwnProperty.call(VENOM_PRESETS, key) ? key : "lethal-protector";
+}
+
+export function venomSectionTitle(options?: VenomThemeOptions): string {
+  return venomThemeText(options?.sectionTitle, VENOM_PRESETS[venomPreset(options)].sectionTitle);
+}
+
+export function venomTransmissionTitle(options?: VenomThemeOptions): string {
+  return venomThemeText(options?.transmissionTitle, VENOM_PRESETS[venomPreset(options)].transmissionTitle);
+}
+
+export function venomToolTag(toolName: string, args: unknown, isError = false): string {
+  if (isError) return "ERROR";
+  const name = toolName.toLowerCase();
+  const data = args && typeof args === "object" ? args as Record<string, unknown> : {};
+  const command = typeof data.command === "string" ? data.command : "";
+  if (/\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:test|check|lint|typecheck)\b|\b(?:pytest|vitest|jest|go test|cargo test|phpunit)\b/i.test(command)) return "VERIFY";
+  if (/\b(?:rg|grep|find|git log|git grep)\b/i.test(command) || name === "grep" || name === "search") return "RECON";
+  if (name === "read" || name === "view") return "READ";
+  if (name === "edit" || name === "write" || name === "apply_patch") return "PATCH";
+  if (name === "bash" || name === "exec" || name === "terminal") return "EXEC";
+  return "TRACE";
+}
+
+/** Tag only the observed operation; never claim a scan, patch, or test that did not happen. */
+export function venomToolLine(toolName: string, args: unknown, brief: string, options?: VenomThemeOptions, isError = false): string {
+  if (venomPreset(options) === "lethal-protector") return brief;
+  const tag = venomToolTag(toolName, args, isError);
+  const source = brief.replace(/^❌\s*/, "").replace(/^\S+\s*:\s*/, "").trim();
+  return "[" + tag + "] " + source;
+}
+
+export function venomCompletionLabel(verified: boolean, options?: VenomThemeOptions): string {
+  if (venomPreset(options) === "blacksite") return verified ? "HUNT COMPLETE // VERIFIED" : "HUNT COMPLETE // UNVERIFIED";
+  if (venomPreset(options) === "minimal-terminal") return verified ? "Completed // verified" : "Completed // unverified";
+  return "Standing Down";
+}
+
 export function venomThemeLabel(activity: VenomActivity, options?: VenomThemeOptions): string {
-  return venomThemeText(options?.labels?.[activity], venomStatusLabel(activity), 48);
+  return venomThemeText(options?.labels?.[activity], VENOM_PRESETS[venomPreset(options)].labels[activity], 48);
 }
 
 export function venomThemeFrame(index: number, options?: VenomThemeOptions) {
@@ -142,4 +223,23 @@ export function formatVenomFooter(
     parts.push(venomThemeText(options?.footerLabel, VENOM_DEFAULTS.footerLabel, 24) + " " + formatHuntDuration(elapsedMs));
   }
   return parts.filter(Boolean).join(" · ");
+}
+
+/** Blacksite telemetry uses two complete lines, without decorative tail bars. */
+export function formatVenomTelemetry(
+  operations: number,
+  elapsedMs: number,
+  context: string | undefined,
+  modelName: string | undefined,
+  options?: VenomThemeOptions,
+): string {
+  if (venomPreset(options) !== "blacksite") return formatVenomFooter(operations, elapsedMs, context, modelName, options);
+  const first = [
+    options?.showOperations === false ? "" : Math.max(0, Math.floor(operations)) + " OPS",
+    context,
+    modelName ? venomThemeText(modelName, "", 55) : "",
+  ].filter(Boolean).join(" · ");
+  const second = options?.showElapsed === false ? "" :
+    "HUNT TIME " + formatHuntDuration(elapsedMs);
+  return [first, second].filter(Boolean).join("\n");
 }

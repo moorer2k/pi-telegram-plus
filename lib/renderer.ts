@@ -9,7 +9,7 @@ import type { TelegramConfig, TelegramRenderLevel, TelegramTransport, TelegramTu
 import type { SecretStore } from "./tui/secrets.ts";
 import { RENDER_LEVELS } from "./types.ts";
 import { log } from "./logger.ts";
-import { venomActivity, venomThemeFrame, venomThemeLabel, venomThemeNumber, venomThemeText, formatVenomContextUsage, formatVenomFooter, formatVenomConsole, VENOM_DEFAULTS, type VenomActivity } from "./venom-theme.ts";
+import { venomActivity, venomThemeFrame, venomThemeLabel, venomThemeNumber, venomThemeText, formatVenomContextUsage, formatVenomFooter, formatVenomConsole, VENOM_DEFAULTS, venomSectionTitle, venomTransmissionTitle, venomToolLine, venomCompletionLabel, formatVenomTelemetry, type VenomActivity } from "./venom-theme.ts";
 
 const renderLog = log.child("renderer");
 
@@ -294,7 +294,7 @@ export function registerTelegramRenderer(
     progress.lastEdit = Date.now();
     const entries = formatVenomConsole(progress.lines, escapeHtml, theme);
     const previewLength = venomThemeNumber(theme?.previewLength, 500, 100, 1500);
-    const preview = progress.latest ? "\n\n<b>" + escapeHtml(venomThemeText(theme?.transmissionTitle, VENOM_DEFAULTS.transmissionTitle)) + "</b>\n" + escapeHtml(progress.latest.slice(0, previewLength)) : "";
+    const preview = progress.latest ? "\n\n<b>" + escapeHtml(venomTransmissionTitle(theme)) + "</b>\n" + escapeHtml(progress.latest.slice(0, previewLength)) : "";
     const frame = venomThemeFrame(progress.frame++, theme);
     // Live metrics may be absent on some Pi/OMP host versions.
     const session = deps.getSession?.();
@@ -304,15 +304,15 @@ export function registerTelegramRenderer(
     const context = formatVenomContextUsage(contextUsage, session?.model?.contextWindow);
     const modelName = session?.model?.id;
     const header = venomThemeText(theme?.title, VENOM_DEFAULTS.title);
-    const section = venomThemeText(theme?.sectionTitle, VENOM_DEFAULTS.sectionTitle);
-    const footer = formatVenomFooter(progress.count, Date.now() - progress.started, context, modelName, theme);
+    const section = venomSectionTitle(theme);
+    const footer = formatVenomTelemetry(progress.count, Date.now() - progress.started, context, modelName, theme);
     const html =
       "<b>" + frame.eye + " " + escapeHtml(header) + "</b>\n" +
       "<i>" + escapeHtml(venomThemeLabel(progress.activity, theme)) + "</i>\n" +
       (theme?.showPulse === false || !frame.pulse ? "" : "<code>" + frame.pulse + "</code>\n") +
       "\n<b>" + escapeHtml(section) + "</b>\n" + entries +
       (preview ? "\n" + preview : "") +
-      (footer ? "\n\n<i>" + escapeHtml(footer) + "</i>" : "");
+      (footer ? "\n\n<i>" + escapeHtml(footer).replace(/\n/g, "</i>\n<i>") + "</i>" : "");
     try {
       // Keep edits serialized; an older animation frame must never overwrite
       // a newer tool event or the completed answer.
@@ -509,7 +509,8 @@ export function registerTelegramRenderer(
       progress.count++;
       progress.activity = venomActivity(event.toolName, event.args);
       toolArgs.set(event.toolCallId, event.args);
-      await addProgress(formatToolBrief(event.toolName, event.args).replace(/^🔧 /, ""));
+      const brief = formatToolBrief(event.toolName, event.args).replace(/^🔧 /, "");
+      await addProgress(venomToolLine(event.toolName, event.args, brief, deps.getConfig().venomTheme));
       return;
     }
     toolArgs.set(event.toolCallId, event.args);
@@ -555,7 +556,8 @@ ${partial}`);
     if (level === "progress") {
       if (event.isError) {
         progress.activity = "adapting";
-        await addProgress(formatToolFailureBrief(event.toolName, event.result, args));
+        const failure = formatToolFailureBrief(event.toolName, event.result, args);
+        await addProgress(venomToolLine(event.toolName, args, failure, deps.getConfig().venomTheme, true));
         await updateProgress(true);
       }
       return;
@@ -680,7 +682,8 @@ ${partial}`);
       if (final) {
         await sendToTurn(markdownToTelegramHtml(final), { final: true, richMarkdown: richMarkdownForTables(final) });
       } else if (turn.replaceMessageId !== undefined) {
-        await deps.transport.editText(turn.chatId, turn.replaceMessageId, "<b>VENOM // LETHAL PROTECTOR</b>\nStanding Down");
+        const theme = deps.getConfig().venomTheme;
+        await deps.transport.editText(turn.chatId, turn.replaceMessageId, "<b>VENOM // LETHAL PROTECTOR</b>\n" + escapeHtml(venomCompletionLabel(false, theme)));
       }
     } catch (err) { renderLog.warn("progress finalization failed", { err }); }
   });

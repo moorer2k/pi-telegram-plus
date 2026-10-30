@@ -10,6 +10,8 @@ export type TelegramSessionIsolation = "shared" | "per-chat";
 
 /** Optional project-local visual settings for the Venom progress card. */
 export type VenomThemeOptions = {
+  /** Visual language preset; explicit text overrides still take precedence. */
+  preset?: "lethal-protector" | "blacksite" | "minimal-terminal";
   title?: string;
   sectionTitle?: string;
   transmissionTitle?: string;
