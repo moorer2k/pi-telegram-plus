@@ -1615,7 +1615,7 @@ export function createTelegramController(deps: {
         if (!rawPrompt || /^!/.test(rawPrompt) || /\n\s*[!/]/.test(rawPrompt)
           || (/^\//.test(rawPrompt) && !addressedCommand)) return;
         const prompt = addressedCommand
-          ? "[This is a public group bot-command mention, not an authorized Pi command.]\\n" + rawPrompt
+          ? "[This is a public group bot-command mention, not an authorized Pi command.]\n" + rawPrompt
           : rawPrompt;
         if (message.photo || message.document || message.video || message.audio
           || message.voice || message.animation || message.sticker) return;
