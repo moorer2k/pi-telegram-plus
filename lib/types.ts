@@ -50,6 +50,8 @@ export type ProjectTelegramBinding = {
   groupAccess?: TelegramGroupAccess;
   sessionIsolation?: TelegramSessionIsolation;
   groupJoinAlerts?: boolean;
+  /** Allow expanded previews on newly sent links (defaults off). */
+  linkPreviews?: boolean;
   /** Per-project runtime pref: retries for failed Telegram API calls (0 = no retry, default 3). Edited via /tg → Config, never written to the registry. */
   retryCount?: number;
   /** Confirmation policy for Telegram-originated shell commands. Defaults to "dangerous". */
