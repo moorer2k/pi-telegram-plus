@@ -574,7 +574,7 @@ export async function getTelegramUpdates(
     {
       offset: config.lastUpdateId === undefined ? undefined : config.lastUpdateId + 1,
       timeout: 30,
-      allowed_updates: ["message", "callback_query"],
+      allowed_updates: ["message", "callback_query", "my_chat_member"],
     },
     signal,
     config.apiBase,
@@ -602,7 +602,7 @@ export async function getPendingTelegramUpdates(
     {
       offset: 0,
       timeout: 0,
-      allowed_updates: ["message", "callback_query"],
+      allowed_updates: ["message", "callback_query", "my_chat_member"],
     },
     signal,
     config.apiBase,
