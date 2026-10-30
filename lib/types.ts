@@ -69,7 +69,8 @@ export type ProjectTelegramBinding = {
   groupAccess?: TelegramGroupAccess;
   sessionIsolation?: TelegramSessionIsolation;
   groupJoinAlerts?: boolean;
-  /** Whether Telegram should generate website/file link preview cards. Default false. */
+  /** Enable expanded URL cards for new sends (off by default). */
+  linkPreviews?: boolean;
   venomTheme?: VenomThemeOptions;
   /** Per-project runtime pref: retries for failed Telegram API calls (0 = no retry, default 3). Edited via /tg → Config, never written to the registry. */
   retryCount?: number;
@@ -112,6 +113,11 @@ export type TelegramConfig = {
   tool?: TelegramRenderLevel;
   /** How to render thinking blocks in Telegram. */
   thinking?: TelegramRenderLevel;
+  groupAccess?: TelegramGroupAccess;
+  sessionIsolation?: TelegramSessionIsolation;
+  groupJoinAlerts?: boolean;
+  linkPreviews?: boolean;
+  venomTheme?: VenomThemeOptions;
   /** Number of retries for failed Telegram API calls (0 = no retry, default 3). */
   retryCount?: number;
   /** Confirmation policy for Telegram-originated shell commands. Defaults to "dangerous". */
@@ -161,8 +167,8 @@ export type TelegramMessage = {
   chat?: { id?: number; type?: string; title?: string; username?: string };
   from?: { id?: number; is_bot?: boolean; username?: string; first_name?: string; last_name?: string };
   /** Telegram includes a shallow copy of the replied-to message. */
-  entities?: Array<{ type: string; offset: number; length: number }>;
-  caption_entities?: Array<{ type: string; offset: number; length: number }>;
+  entities?: Array<{ type: string; offset: number; length: number; user?: { id?: number; is_bot?: boolean; username?: string } }>;
+  caption_entities?: Array<{ type: string; offset: number; length: number; user?: { id?: number; is_bot?: boolean; username?: string } }>;
   new_chat_members?: Array<{ id?: number; is_bot?: boolean; username?: string }>;
   reply_to_message?: TelegramMessage;
   /** Selected text quote metadata for Telegram replies/quotes, when provided by Bot API. */
