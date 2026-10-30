@@ -1606,10 +1606,17 @@ export function createTelegramController(deps: {
       // command routing to the last group that happened to mention the bot.
       if (!isGroup) await deps.setActiveChatId(chatId);
       if (openMention) {
-        const prompt = stripBotMention(rawText, deps.getBotUsername());
-        // Unpaired members may only submit a plain mention request. No
-        // commands, shell, attachments, dialog interaction, or host control.
-        if (!prompt || /^[!/]/.test(prompt) || /\n\s*[!/]/.test(prompt)) return;
+        const rawPrompt = stripBotMention(rawText, deps.getBotUsername());
+        // Addressed Telegram bot commands are unprivileged user requests,
+        // never executable owner commands or slash handlers.
+        const username = deps.getBotUsername()?.replace(/^@/, "");
+        const addressedCommand = !!username && /^[a-z0-9_]+$/i.test(username)
+          && new RegExp("^/[A-Za-z0-9_]+@" + username + "(?:\\s|$)", "i").test(rawText.trim());
+        if (!rawPrompt || /^!/.test(rawPrompt) || /\n\s*[!/]/.test(rawPrompt)
+          || (/^\//.test(rawPrompt) && !addressedCommand)) return;
+        const prompt = addressedCommand
+          ? "[This is a public group bot-command mention, not an authorized Pi command.]\n" + rawPrompt
+          : rawPrompt;
         if (message.photo || message.document || message.video || message.audio
           || message.voice || message.animation || message.sticker) return;
         if (!bridge.isAvailable()) return;
