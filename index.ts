@@ -21,6 +21,7 @@ import { installTelegramStatusAlignment } from "./lib/status-footer.ts";
 import { createTelegramPollingRuntime } from "./lib/polling.ts";
 import { PollingNoticeGate, classifyPollingError } from "./lib/polling-notice.ts";
 import { deliverPendingNotices } from "./lib/pending-notices.ts";
+import { deliverVenomRestartNotice } from "./lib/maintenance.ts";
 import { initLogger, log, type LogLevel } from "./lib/logger.ts";
 import { authorizeTelegramUser, ensureTelegramPairingCode, formatPairingInstructions } from "./lib/pairing.ts";
 import { getCurrentTelegramTurn } from "./lib/turn-context.ts";
@@ -708,6 +709,7 @@ export default function piTelegramPlus(rawPi: ExtensionAPI): void {
     // sends them with its own transport. The take inside drains the queue, so a
     // later reconcile never repeats a delivery.
     deliverPendingNotices(transport);
+    void deliverVenomRestartNotice(resolvedConfig?.bot?.id, transport);
     refreshStatus();
   };
 
