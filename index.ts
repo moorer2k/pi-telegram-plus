@@ -440,7 +440,7 @@ export default function piTelegramPlus(rawPi: ExtensionAPI): void {
     shouldProcess: isActiveInstance,
     handleUpdate: async (update) => {
       refreshStatus();
-      if (update.my_chat_member) {
+      if (update.my_chat_member && config.groupJoinAlerts !== false) {
         await notifyNewGroupOnce(update.my_chat_member, {
           ownerId: config.allowedUserId,
           botId: resolvedConfig?.bot?.id,
