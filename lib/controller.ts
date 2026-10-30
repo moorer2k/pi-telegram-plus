@@ -1570,8 +1570,11 @@ export function createTelegramController(deps: {
       const isGroup = message.chat?.type === "group" || message.chat?.type === "supergroup";
       const ownerAuthorized = message.from?.id !== undefined
         && message.from.id === deps.getConfig?.().allowedUserId;
-      const openMention = isGroup && !ownerAuthorized
-        && isGroupMentionAllowed(message, deps.getBotUsername());
+      const addressed = isGroupMentionAllowed(message, deps.getBotUsername());
+      // Only addressed group messages are acted upon, including messages from
+      // the owner. Non-owner mentions use the restricted prompt-only path.
+      if (isGroup && !addressed) return;
+      const openMention = isGroup && !ownerAuthorized && addressed;
       if (!openMention) {
         const authorization = await deps.authorizeUser(message.from?.id, rawText);
         if (!authorization) return;
