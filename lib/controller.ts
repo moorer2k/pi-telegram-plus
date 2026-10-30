@@ -1087,9 +1087,18 @@ export function createTelegramController(deps: {
       return;
     }
     const session = deps.getSession();
-    if (!session) return;
+    if (!session) {
+      deps.endTelegramTurn(chatId, turn);
+      return;
+    }
     const telegramUi = deps.ui.create(chatId, messageThreadId, sourceMessageId);
     try {
+      // Ordinary text messages have no replaceMessageId. Create a Telegram
+      // status message first and use that ID for every progress edit.
+      if (deps.getConfig?.().tool === "progress" && turn.replaceMessageId === undefined) {
+        const sent = await deps.transport.sendText(chatId, "<b>◐ VENOM · Starting…</b>", messageThreadId, sourceMessageId);
+        turn.replaceMessageId = sent[0]?.message_id;
+      }
       await runWithTelegramTurn(turn, () => runWithTelegramUi({
         session,
         ui: telegramUi,
@@ -1148,6 +1157,10 @@ export function createTelegramController(deps: {
         }
         const telegramUi = deps.ui.create(chatId, messageThreadId, sourceMessageId);
         try {
+          if (deps.getConfig?.().tool === "progress" && turn.replaceMessageId === undefined) {
+            const sent = await deps.transport.sendText(chatId, "<b>◐ VENOM · Starting…</b>", messageThreadId, sourceMessageId);
+            turn.replaceMessageId = sent[0]?.message_id;
+          }
           await runWithTelegramTurn(turn, () => runWithTelegramUi({
             session,
             ui: telegramUi,
