@@ -64,6 +64,13 @@ export function contentToRenderParts(
   return { body: body.filter(Boolean).join("\n\n"), inlineEvents };
 }
 
+/** Retain meaningful intermediate assistant replies in the final transcript. */
+export function appendProgressMessage(messages: string[], message: string): string[] {
+  const content = message.trim();
+  if (!content || messages.at(-1) === content) return messages;
+  return [...messages, content];
+}
+
 export function contentImages(content: unknown): Array<{ data: string; mimeType?: string }> {
   if (!Array.isArray(content)) return [];
   return content.flatMap((part) => {
@@ -591,9 +598,7 @@ ${partial}`);
     const hasBody = body.trim().length > 0;
     if (hasBody && progressMode() && progress.target && progressTarget() === progress.target) {
       const messageText = body.trim();
-      if (messageText && progress.messages.at(-1) !== messageText) {
-        progress.messages.push(messageText);
-      }
+      progress.messages = appendProgressMessage(progress.messages, messageText);
       progress.latest = messageText;
       await updateProgress(true);
     } else if (hasBody) {
