@@ -104,3 +104,42 @@ export function formatVenomConsole(
   if (selected.length === 0) return "<code>" + escape(prefix + " " + venomThemeText(options?.awaitingText, VENOM_DEFAULTS.awaitingText)) + "</code>";
   return selected.map(line => "<code>" + escape(prefix + " " + line) + "</code>").join("\n");
 }
+
+/** Render only measured context usage; never invent a percentage or limit. */
+export function formatVenomContextUsage(
+  usage: unknown,
+  modelWindow?: unknown,
+): string | undefined {
+  if (!usage || typeof usage !== "object") return undefined;
+  const data = usage as Record<string, unknown>;
+  const limit = typeof data.contextWindow === "number" && Number.isFinite(data.contextWindow) && data.contextWindow > 0
+    ? data.contextWindow
+    : typeof modelWindow === "number" && Number.isFinite(modelWindow) && modelWindow > 0
+      ? modelWindow : undefined;
+  const tokens = typeof data.tokens === "number" && Number.isFinite(data.tokens) && data.tokens >= 0 ? data.tokens : undefined;
+  if (!limit) return undefined;
+  const percent = tokens !== undefined ? tokens / limit * 100
+    : typeof data.percent === "number" && Number.isFinite(data.percent) && data.percent >= 0 && data.percent <= 100
+      ? data.percent : undefined;
+  if (percent === undefined) return undefined;
+  const size = limit >= 1000 ? (limit / 1000).toFixed(limit % 1000 === 0 ? 0 : 1) + "k" : String(Math.round(limit));
+  return percent.toFixed(1) + "% / " + size;
+}
+
+/** Compact single-line information footer. Omit unavailable live metrics. */
+export function formatVenomFooter(
+  operations: number,
+  elapsedMs: number,
+  context: string | undefined,
+  modelName: string | undefined,
+  options?: VenomThemeOptions,
+): string {
+  const parts: string[] = [];
+  if (options?.showOperations !== false) parts.push(Math.max(0, Math.floor(operations)) + " operations");
+  if (context) parts.push(context);
+  if (modelName) parts.push(venomThemeText(modelName, "", 55));
+  if (options?.showElapsed !== false) {
+    parts.push(venomThemeText(options?.footerLabel, VENOM_DEFAULTS.footerLabel, 24) + " " + formatHuntDuration(elapsedMs));
+  }
+  return parts.filter(Boolean).join(" · ");
+}
