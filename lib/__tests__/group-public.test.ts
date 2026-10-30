@@ -47,7 +47,7 @@ describe("public group mentions", () => {
     expect(isGroupMentionAllowed({ ...m, entities: [{ ...m.entities[0], user: { ...m.entities[0].user, username: "somebody_else" } }] }, "pi3090_bot")).toBe(false);
   });
   it("recognizes caption mentions while excluding bot messages", () => {
-    const m = { ...msg("", "pi3090_bot"), text: undefined, caption: "@pi3090_bot see this", caption_entities: [{ type: "mention", offset: 0, length: 12 }] };
+    const m = { ...msg("", "pi3090_bot"), text: undefined, caption: "@pi3090_bot see this", caption_entities: [{ type: "mention", offset: 0, length: "@pi3090_bot".length }] };
     expect(isGroupMentionAllowed(m, "pi3090_bot")).toBe(true);
     expect(isGroupMentionAllowed({ ...m, from: { id: 44, is_bot: true } }, "pi3090_bot")).toBe(false);
   });
