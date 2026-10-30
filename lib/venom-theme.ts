@@ -153,7 +153,7 @@ export function venomToolTag(toolName: string, args: unknown, isError = false): 
 export function venomToolLine(toolName: string, args: unknown, brief: string, options?: VenomThemeOptions, isError = false): string {
   if (venomPreset(options) === "lethal-protector") return brief;
   const tag = venomToolTag(toolName, args, isError);
-  const source = brief.replace(/^\S+\s*:\s*/, "").trim();
+  const source = brief.replace(/^❌\s*/, "").replace(/^\S+\s*:\s*/, "").trim();
   return "[" + tag + "] " + source;
 }
 
