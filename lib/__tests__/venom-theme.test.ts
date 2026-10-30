@@ -29,7 +29,7 @@ describe("Venom Lethal Protector presentation", () => {
     const entries = formatConsoleActivity(["read: lib/a.ts", "bash: rg <private>", "bash: npm test"], value => value.replaceAll("<", "&lt;").replaceAll(">", "&gt;"));
     expect(entries).toContain("<code>&gt; read: lib/a.ts</code>");
     expect(entries).toContain("<code>&gt; bash: rg &lt;private&gt;</code>");
-    expect(entries.split("\\n")).toHaveLength(3);
+    expect(entries.split("\n")).toHaveLength(3);
     expect(entries).not.toContain("•");
     expect(formatConsoleActivity([], value => value)).toContain("awaiting target");
   });
