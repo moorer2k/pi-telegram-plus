@@ -64,6 +64,13 @@ export function contentToRenderParts(
   return { body: body.filter(Boolean).join("\n\n"), inlineEvents };
 }
 
+/** Retain meaningful intermediate assistant replies in the final transcript. */
+export function appendProgressMessage(messages: string[], message: string): string[] {
+  const content = message.trim();
+  if (!content || messages.at(-1) === content) return messages;
+  return [...messages, content];
+}
+
 export function contentImages(content: unknown): Array<{ data: string; mimeType?: string }> {
   if (!Array.isArray(content)) return [];
   return content.flatMap((part) => {
@@ -259,7 +266,16 @@ export function registerTelegramRenderer(
   const sentInlineEvents = new Set<string>();
   const toolUpdateAt = new Map<string, number>();
   const toolArgs = new Map<string, unknown>();
-  const progress = { target: "", lines: [] as string[], latest: "", count: 0, lastEdit: 0 };
+  const progress = {
+    target: "", lines: [] as string[], latest: "", messages: [] as string[],
+    count: 0, lastEdit: 0, frame: 0, editing: false,
+  };
+  let progressTimer: ReturnType<typeof setInterval> | undefined;
+  const frames = ["◐", "◓", "◑", "◒"] as const;
+  const stopProgressTimer = () => {
+    if (progressTimer !== undefined) clearInterval(progressTimer);
+    progressTimer = undefined;
+  };
   const progressMode = () => deps.getConfig().tool === "progress";
   const progressTarget = () => {
     const turn = deps.getActiveTurn();
@@ -270,14 +286,25 @@ export function registerTelegramRenderer(
   const updateProgress = async (force = false) => {
     const turn = deps.getActiveTurn();
     if (!progressMode() || !turn || !progress.target || progressTarget() !== progress.target) return;
-    if (!force && Date.now() - progress.lastEdit < 2000) return;
+    if (progress.editing || (!force && Date.now() - progress.lastEdit < 2400)) return;
+    progress.editing = true;
     progress.lastEdit = Date.now();
-    const entries = progress.lines.slice(-4).map(line => "• " + escapeHtml(line)).join("\n");
-    const preview = progress.latest ? "\n\n<b>Latest update</b>\n" + escapeHtml(progress.latest.slice(0, 400)) : "";
-    await deps.transport.editText(turn.chatId, turn.replaceMessageId!,
-      "<b>◐ VENOM · Working</b>\n\n" + (entries || "Preparing…") + preview +
-      "\n\n<i>" + progress.count + " operations</i>"
-    ).catch(err => renderLog.debug("progress edit failed", { err }));
+    const entries = progress.lines.slice(-3).map(line => "• " + escapeHtml(line)).join("\n");
+    const preview = progress.latest ? "\n\n<b>Latest response</b>\n" + escapeHtml(progress.latest.slice(0, 500)) : "";
+    const frame = frames[progress.frame % frames.length];
+    progress.frame += 1;
+    const html = "<b>" + frame + " VENOM · In pursuit</b>\n" +
+      "━━━━━━━━━━━━\n" + (entries || "Preparing…") + preview +
+      "\n\n<i>" + progress.count + " operations</i>";
+    try {
+      // Keep edits serialized; an older animation frame must never overwrite
+      // a newer tool event or the completed answer.
+      await deps.transport.editText(turn.chatId, turn.replaceMessageId!, html);
+    } catch (err) {
+      renderLog.debug("progress edit failed", { err });
+    } finally {
+      progress.editing = false;
+    }
   };
   const addProgress = async (line: string) => {
     if (!progressMode() || !progress.target || progressTarget() !== progress.target) return;
@@ -416,7 +443,23 @@ export function registerTelegramRenderer(
     toolArgs.clear();
     toolUpdateAt.clear();
     workflowNoticeSent = false;
-    if (progressMode()) { progress.target = progressTarget(); progress.lines = []; progress.latest = ""; progress.count = 0; progress.lastEdit = 0; }
+    stopProgressTimer();
+    if (progressMode()) {
+      progress.target = progressTarget();
+      progress.lines = [];
+      progress.latest = "";
+      progress.messages = [];
+      progress.count = 0;
+      progress.lastEdit = 0;
+      progress.frame = 0;
+      progress.editing = false;
+      // Telegram has no continually animated text format. Edit the existing
+      // message on a bounded timer, including while a tool is blocking.
+      if (progress.target) {
+        progressTimer = setInterval(() => { void updateProgress(); }, 2600);
+        progressTimer.unref?.();
+      }
+    }
     const turn = deps.getActiveTurn();
     if (!turn) return;
     if (turn.replaceMessageId !== undefined) {
@@ -554,7 +597,9 @@ ${partial}`);
 
     const hasBody = body.trim().length > 0;
     if (hasBody && progressMode() && progress.target && progressTarget() === progress.target) {
-      progress.latest = body.trim();
+      const messageText = body.trim();
+      progress.messages = appendProgressMessage(progress.messages, messageText);
+      progress.latest = messageText;
       await updateProgress(true);
     } else if (hasBody) {
       // A Markdown table cannot be expressed in Telegram's HTML mode, so the
@@ -601,7 +646,15 @@ ${partial}`);
       if (!progressMode() || !progress.target || progressTarget() !== progress.target) return;
       const turn = deps.getActiveTurn();
       if (!turn) return;
-      const final = progress.latest;
+      stopProgressTimer();
+      // A scheduled edit may still be in flight when agent_end fires. Let it
+      // finish before replacing the placeholder with the final answer.
+      for (let attempt = 0; attempt < 80 && progress.editing; attempt++) {
+        await new Promise<void>(resolve => setTimeout(resolve, 25));
+      }
+      // Preserve intermediate responses, including useful tool findings,
+      // instead of replacing them with only the last assistant text.
+      const final = progress.messages.join("\n\n");
       progress.target = "";
       if (final) {
         await sendToTurn(markdownToTelegramHtml(final), { final: true, richMarkdown: richMarkdownForTables(final) });
