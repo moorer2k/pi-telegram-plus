@@ -5,7 +5,7 @@ import { readFile, writeFile, rename, mkdir, unlink } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getAgentDir } from "./config.ts";
-import type { TelegramTransport } from "./types.ts";
+import type { TelegramTransport, VenomRestartPhrases } from "./types.ts";
 import { escapeHtml } from "./html.ts";
 import { log } from "./logger.ts";
 
@@ -25,14 +25,14 @@ type RestartMarker = {
   phrase: string;
 };
 
-const STARTING_PHRASES = [
+export const STARTING_PHRASES = [
   "The symbiote is shedding its old skin. Stay close.",
   "We are evolving. Do not mistake the silence for weakness.",
   "The hunt pauses. The predator does not.",
   "Our next form is almost ready. Hold the line.",
   "We are going dark to grow stronger.",
 ];
-const RETURN_PHRASES = [
+export const RETURN_PHRASES = [
   "We are Venom. And we are back.",
   "The symbiote has awakened. Let the hunt continue.",
   "Stronger, sharper, hungrier. We have returned.",
@@ -40,8 +40,21 @@ const RETURN_PHRASES = [
   "The darkness never held us. We are online.",
 ];
 
-export function venomRestartPhrase(phase: "before" | "after"): string {
-  const pool = phase === "before" ? STARTING_PHRASES : RETURN_PHRASES;
+export const MAX_VENOM_PHRASES = 30;
+export const MAX_VENOM_PHRASE_LENGTH = 240;
+
+/** Explicit empty arrays are invalid; reset to defaults instead. */
+export function validatedVenomPhrases(phase: "before" | "after", prefs?: VenomRestartPhrases): string[] {
+  const defaults = phase === "before" ? STARTING_PHRASES : RETURN_PHRASES;
+  const selected = prefs?.[phase];
+  if (!Array.isArray(selected) || selected.length === 0 || selected.length > MAX_VENOM_PHRASES ||
+      selected.some(value => typeof value !== "string" || !value.trim() ||
+        value.length > MAX_VENOM_PHRASE_LENGTH || /[\\x00-\\x1f\\x7f]/.test(value))) return [...defaults];
+  return [...new Set(selected)];
+}
+
+export function venomRestartPhrase(phase: "before" | "after", prefs?: VenomRestartPhrases): string {
+  const pool = validatedVenomPhrases(phase, prefs);
   return pool[randomInt(pool.length)]!;
 }
 
@@ -98,6 +111,7 @@ export async function updateAndRestartVenom(
   chatId: number,
   botId: string,
   transport: Pick<TelegramTransport, "sendText">,
+  phrases?: VenomRestartPhrases,
 ): Promise<{ fromSha: string; toSha: string }> {
   const service = getMaintenanceService();
   if (!service) throw new Error("Automatic restart is not configured: set PI_TELEGRAM_RESTART_UNIT to the running systemd .service unit.");
@@ -106,7 +120,7 @@ export async function updateAndRestartVenom(
   if (status !== "active") throw new Error("The configured systemd service is not active.");
 
   const result = await updateVenomCheckout();
-  const phrase = venomRestartPhrase("before");
+  const phrase = venomRestartPhrase("before", phrases);
   await transport.sendText(chatId, "<b>VENOM // EVOLUTION PROTOCOL</b>\n" +
     escapeHtml(phrase) + "\n<code>" + result.toSha.slice(0, 9) + "</code> · Restarting Pi-Bolt");
   await writeMarker({
@@ -137,6 +151,7 @@ let delivering = false;
 export async function deliverVenomRestartNotice(
   botId: string | undefined,
   transport: Pick<TelegramTransport, "sendText">,
+  phrases?: VenomRestartPhrases,
 ): Promise<void> {
   if (delivering || !botId) return;
   delivering = true;
@@ -150,7 +165,7 @@ export async function deliverVenomRestartNotice(
     }
     if (!Number.isSafeInteger(marker.chatId)) return;
     await transport.sendText(marker.chatId,
-      "<b>VENOM // SYMBIOTE ONLINE</b>\n" + escapeHtml(venomRestartPhrase("after")) +
+      "<b>VENOM // SYMBIOTE ONLINE</b>\n" + escapeHtml(venomRestartPhrase("after", phrases)) +
       "\n<code>" + escapeHtml(marker.toSha.slice(0, 9)) + "</code> · Pi-Bolt reconnected");
     await unlink(path).catch((err) => logger.warn("restart marker cleanup failed", { err }));
   } catch (err) {
