@@ -642,6 +642,11 @@ ${partial}`);
       const turn = deps.getActiveTurn();
       if (!turn) return;
       stopProgressTimer();
+      // A scheduled edit may still be in flight when agent_end fires. Let it
+      // finish before replacing the placeholder with the final answer.
+      for (let attempt = 0; attempt < 80 && progress.editing; attempt++) {
+        await new Promise<void>(resolve => setTimeout(resolve, 25));
+      }
       // Preserve intermediate responses, including useful tool findings,
       // instead of replacing them with only the last assistant text.
       const final = progress.messages.join("\n\n");
