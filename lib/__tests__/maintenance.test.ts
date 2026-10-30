@@ -45,7 +45,7 @@ describe("one-time post-restart Venom notices", () => {
     const previousDir = process.env.PI_CODING_AGENT_DIR;
     process.env.PI_CODING_AGENT_DIR = dir;
     const file = join(dir, "venom-restart-pending.json");
-    const sendText = vi.fn(async () => [{ message_id: 1 }]);
+    const sendText = vi.fn(async (..._args: unknown[]) => [{ message_id: 1 }]);
     try {
       const marker = {
         botId: "test-bot", chatId: 123, previousPid: process.pid + 1,
@@ -72,7 +72,7 @@ describe("one-time post-restart Venom notices", () => {
     const dir = await mkdtemp(join(tmpdir(), "venom-maintenance-stale-"));
     const previousDir = process.env.PI_CODING_AGENT_DIR;
     process.env.PI_CODING_AGENT_DIR = dir;
-    const sendText = vi.fn(async () => [{ message_id: 1 }]);
+    const sendText = vi.fn(async (..._args: unknown[]) => [{ message_id: 1 }]);
     try {
       await writeFile(join(dir, "venom-restart-pending.json"), JSON.stringify({
         botId: "test-bot", chatId: 123, previousPid: process.pid + 1,
