@@ -9,7 +9,7 @@ import type { TelegramConfig, TelegramRenderLevel, TelegramTransport, TelegramTu
 import type { SecretStore } from "./tui/secrets.ts";
 import { RENDER_LEVELS } from "./types.ts";
 import { log } from "./logger.ts";
-import { venomActivity, venomPulse, venomStatusLabel, type VenomActivity } from "./venom-theme.ts";
+import { venomActivity, venomPulse, venomStatusLabel, formatHuntDuration, formatConsoleActivity, type VenomActivity } from "./venom-theme.ts";
 
 const renderLog = log.child("renderer");
 
@@ -290,17 +290,17 @@ export function registerTelegramRenderer(
     if (progress.editing || (!force && Date.now() - progress.lastEdit < 2400)) return;
     progress.editing = true;
     progress.lastEdit = Date.now();
-    const entries = progress.lines.slice(-3).map(line => "• " + escapeHtml(line)).join("\n");
+    const entries = formatConsoleActivity(progress.lines, escapeHtml);
     const preview = progress.latest ? "\n\n<b>Latest response</b>\n" + escapeHtml(progress.latest.slice(0, 500)) : "";
     const frame = venomPulse(progress.frame++);
-    const seconds = Math.max(0, Math.floor((Date.now() - progress.started) / 1000));
+    const huntTime = formatHuntDuration(Date.now() - progress.started);
     const html =
       "<b>" + frame.eye + " VENOM // LETHAL PROTECTOR</b>\n" +
-      "<i>" + venomStatusLabel(progress.activity) + "</i> · " + seconds + "s\n" +
+      "<i>" + venomStatusLabel(progress.activity) + "</i>\n" +
       "<code>" + frame.pulse + "</code>\n\n" +
-      "<b>THE HUNT</b>\n" + (entries || "Awakening…") +
+      "<b>THE HUNT // TERMINAL</b>\n" + entries +
       (preview ? "\n" + preview.replace("<b>Latest response</b>", "<b>SYMBIOTE TRANSMISSION</b>") : "") +
-      "\n\n<i>" + progress.count + " operations</i>\n" +
+      "\n\n<i>" + progress.count + " operations · hunting " + huntTime + "</i>\n" +
       "━━━━━━━━━━━━";
     try {
       // Keep edits serialized; an older animation frame must never overwrite
