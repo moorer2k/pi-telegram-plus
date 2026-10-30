@@ -69,6 +69,8 @@ export type ProjectTelegramBinding = {
   groupAccess?: TelegramGroupAccess;
   sessionIsolation?: TelegramSessionIsolation;
   groupJoinAlerts?: boolean;
+  /** Whether Telegram should generate website/file link preview cards. Default false. */
+  linkPreviews?: boolean;
   venomTheme?: VenomThemeOptions;
   /** Per-project runtime pref: retries for failed Telegram API calls (0 = no retry, default 3). Edited via /tg → Config, never written to the registry. */
   retryCount?: number;
