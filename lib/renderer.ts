@@ -9,6 +9,7 @@ import type { TelegramConfig, TelegramRenderLevel, TelegramTransport, TelegramTu
 import type { SecretStore } from "./tui/secrets.ts";
 import { RENDER_LEVELS } from "./types.ts";
 import { log } from "./logger.ts";
+import { venomActivity, venomPulse, venomStatusLabel, type VenomActivity } from "./venom-theme.ts";
 
 const renderLog = log.child("renderer");
 
@@ -269,9 +270,9 @@ export function registerTelegramRenderer(
   const progress = {
     target: "", lines: [] as string[], latest: "", messages: [] as string[],
     count: 0, lastEdit: 0, frame: 0, editing: false,
+    activity: "awakening" as VenomActivity, started: 0,
   };
   let progressTimer: ReturnType<typeof setInterval> | undefined;
-  const frames = ["◐", "◓", "◑", "◒"] as const;
   const stopProgressTimer = () => {
     if (progressTimer !== undefined) clearInterval(progressTimer);
     progressTimer = undefined;
@@ -291,11 +292,16 @@ export function registerTelegramRenderer(
     progress.lastEdit = Date.now();
     const entries = progress.lines.slice(-3).map(line => "• " + escapeHtml(line)).join("\n");
     const preview = progress.latest ? "\n\n<b>Latest response</b>\n" + escapeHtml(progress.latest.slice(0, 500)) : "";
-    const frame = frames[progress.frame % frames.length];
-    progress.frame += 1;
-    const html = "<b>" + frame + " VENOM · In pursuit</b>\n" +
-      "━━━━━━━━━━━━\n" + (entries || "Preparing…") + preview +
-      "\n\n<i>" + progress.count + " operations</i>";
+    const frame = venomPulse(progress.frame++);
+    const seconds = Math.max(0, Math.floor((Date.now() - progress.started) / 1000));
+    const html =
+      "<b>" + frame.eye + " VENOM // LETHAL PROTECTOR</b>\n" +
+      "<i>" + venomStatusLabel(progress.activity) + "</i> · " + seconds + "s\n" +
+      "<code>" + frame.pulse + "</code>\n\n" +
+      "<b>THE HUNT</b>\n" + (entries || "Awakening…") +
+      (preview ? "\n" + preview.replace("<b>Latest response</b>", "<b>SYMBIOTE TRANSMISSION</b>") : "") +
+      "\n\n<i>" + progress.count + " operations</i>\n" +
+      "━━━━━━━━━━━━";
     try {
       // Keep edits serialized; an older animation frame must never overwrite
       // a newer tool event or the completed answer.
@@ -452,6 +458,8 @@ export function registerTelegramRenderer(
       progress.count = 0;
       progress.lastEdit = 0;
       progress.frame = 0;
+      progress.activity = "awakening";
+      progress.started = Date.now();
       progress.editing = false;
       // Telegram has no continually animated text format. Edit the existing
       // message on a bounded timer, including while a tool is blocking.
@@ -488,6 +496,7 @@ export function registerTelegramRenderer(
     if (level === "hidden") return;
     if (level === "progress") {
       progress.count++;
+      progress.activity = venomActivity(event.toolName, event.args);
       toolArgs.set(event.toolCallId, event.args);
       await addProgress(formatToolBrief(event.toolName, event.args).replace(/^🔧 /, ""));
       return;
@@ -534,6 +543,7 @@ ${partial}`);
     toolArgs.delete(event.toolCallId);
     if (level === "progress") {
       if (event.isError) {
+        progress.activity = "adapting";
         await addProgress(formatToolFailureBrief(event.toolName, event.result, args));
         await updateProgress(true);
       }
@@ -659,7 +669,7 @@ ${partial}`);
       if (final) {
         await sendToTurn(markdownToTelegramHtml(final), { final: true, richMarkdown: richMarkdownForTables(final) });
       } else if (turn.replaceMessageId !== undefined) {
-        await deps.transport.editText(turn.chatId, turn.replaceMessageId, "<b>VENOM · Finished</b>");
+        await deps.transport.editText(turn.chatId, turn.replaceMessageId, "<b>VENOM // LETHAL PROTECTOR</b>\nStanding Down");
       }
     } catch (err) { renderLog.warn("progress finalization failed", { err }); }
   });
