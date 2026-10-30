@@ -8,6 +8,25 @@ export const RENDER_LEVELS: readonly TelegramRenderLevel[] = ["hidden", "brief",
 export type TelegramGroupAccess = "disabled" | "owner-mentions" | "public-mentions";
 export type TelegramSessionIsolation = "shared" | "per-chat";
 
+/** Optional project-local visual settings for the Venom progress card. */
+export type VenomThemeOptions = {
+  title?: string;
+  sectionTitle?: string;
+  transmissionTitle?: string;
+  footerLabel?: string;
+  consolePrefix?: string;
+  divider?: string;
+  awaitingText?: string;
+  labels?: Partial<Record<"awakening" | "tracking" | "examining" | "testing" | "adapting" | "hunting", string>>;
+  animation?: "symbiote" | "spinner" | "static";
+  animationIntervalMs?: number;
+  visibleOperations?: number;
+  previewLength?: number;
+  showElapsed?: boolean;
+  showOperations?: boolean;
+  showPulse?: boolean;
+};
+
 export type TelegramBashConfirm = "always" | "dangerous" | "never";
 export const BASH_CONFIRM_MODES: readonly TelegramBashConfirm[] = ["always", "dangerous", "never"] as const;
 
@@ -50,6 +69,8 @@ export type ProjectTelegramBinding = {
   groupAccess?: TelegramGroupAccess;
   sessionIsolation?: TelegramSessionIsolation;
   groupJoinAlerts?: boolean;
+  /** Whether Telegram should generate website/file link preview cards. Default false. */
+  venomTheme?: VenomThemeOptions;
   /** Per-project runtime pref: retries for failed Telegram API calls (0 = no retry, default 3). Edited via /tg → Config, never written to the registry. */
   retryCount?: number;
   /** Confirmation policy for Telegram-originated shell commands. Defaults to "dangerous". */
