@@ -9,6 +9,7 @@ import type { TgConfigDeps, SessionDeps } from "./register.ts";
 import type { BotRecord, BotRegistry, CapturedAgentSession, TelegramConfig } from "../types.ts";
 import { currentHostName } from "../tui/host.ts";
 import type { TuiHost } from "../tui-bridge.ts";
+import { configVenomThemeFlow } from "./tg-venom-theme.ts";
 import { configToolFlow, configThinkingFlow, configRetryFlow, configBashFlow, configGroupAccessFlow, configSessionIsolationFlow, configGroupJoinAlertsFlow } from "./tg-config.ts";
 import { formatPairingInstructions } from "../pairing.ts";
 import { formatDebugReport } from "./info.ts";
@@ -437,6 +438,7 @@ export function buildConfigMenuOptions(
     `👥 Group access: ${config.groupAccess ?? "owner-mentions"}`,
     `🔒 Chat sessions: ${config.sessionIsolation ?? "shared"}`,
     `🔔 Group join alerts: ${config.groupJoinAlerts === false ? "off" : "on"}`,
+    "Venom appearance",
     BACK_LABEL,
   ];
 }
@@ -473,6 +475,8 @@ async function configMenu(ui: MenuUi, configDeps: TgConfigDeps, sessionDeps?: Se
       await configSessionIsolationFlow(ui, configDeps);
     } else if (choice.startsWith("🔔 Group join alerts:")) {
       await configGroupJoinAlertsFlow(ui, configDeps);
+    } else if (choice === "Venom appearance") {
+      await configVenomThemeFlow(ui, configDeps);
     }
   }
 }
