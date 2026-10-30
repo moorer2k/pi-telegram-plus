@@ -709,7 +709,7 @@ export default function piTelegramPlus(rawPi: ExtensionAPI): void {
     // sends them with its own transport. The take inside drains the queue, so a
     // later reconcile never repeats a delivery.
     deliverPendingNotices(transport);
-    void deliverVenomRestartNotice(resolvedConfig?.bot?.id, transport);
+    void deliverVenomRestartNotice(resolvedConfig?.bot?.id, transport, config.venomRestartPhrases);
     refreshStatus();
   };
 
