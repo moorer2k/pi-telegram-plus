@@ -52,7 +52,7 @@ export function contentToRenderParts(
       const inline = formatThinkingInline(p, thinkingLevel);
       if (inline) inlineEvents.push(inline);
     } else if (p.type === "toolCall") {
-      if (toolLevel === "hidden") continue;
+      if (toolLevel === "hidden" || toolLevel === "progress") continue;
       const name = String(p.name ?? "tool");
       inlineEvents.push(toolLevel === "brief"
         ? formatToolBrief(name, p.arguments ?? {})
@@ -490,7 +490,10 @@ ${partial}`);
     const args = toolArgs.get(event.toolCallId);
     toolArgs.delete(event.toolCallId);
     if (level === "progress") {
-      if (event.isError) await addProgress(formatToolFailureBrief(event.toolName, event.result, args));
+      if (event.isError) {
+        await addProgress(formatToolFailureBrief(event.toolName, event.result, args));
+        await updateProgress(true);
+      }
       return;
     }
     if (level === "hidden") return;
@@ -539,7 +542,7 @@ ${partial}`);
     const thinkingLevel = renderLevel(config, "thinking");
     const toolLevel = renderLevel(config, "tool");
     const rendered = contentToRenderParts(message.content, thinkingLevel, toolLevel);
-    await sendInlineEvents(rendered.inlineEvents);
+    if (!progressMode()) await sendInlineEvents(rendered.inlineEvents);
     // Redact the whole reply (prose *and* the oversized code blocks pulled out
     // of it below) before it is converted to HTML or sent as Markdown (§4.7.4).
     const rawBody = redactFor(deps.getActiveTurn(), rendered.body || message.errorMessage || "");
@@ -551,7 +554,7 @@ ${partial}`);
 
     const hasBody = body.trim().length > 0;
     if (hasBody && progressMode() && progress.target && progressTarget() === progress.target) {
-      progress.latest = body.replace(/\s+/g, " ").trim();
+      progress.latest = body.trim();
       await updateProgress(true);
     } else if (hasBody) {
       // A Markdown table cannot be expressed in Telegram's HTML mode, so the
