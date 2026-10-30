@@ -9,7 +9,7 @@ import type { TelegramConfig, TelegramRenderLevel, TelegramTransport, TelegramTu
 import type { SecretStore } from "./tui/secrets.ts";
 import { RENDER_LEVELS } from "./types.ts";
 import { log } from "./logger.ts";
-import { venomActivity, venomThemeFrame, venomThemeLabel, venomThemeNumber, venomThemeText, formatVenomContextUsage, formatVenomFooter, formatVenomConsole, VENOM_DEFAULTS, venomSectionTitle, venomTransmissionTitle, venomToolLine, venomCompletionLabel, formatVenomTelemetry, type VenomActivity } from "./venom-theme.ts";
+import { venomActivity, venomThemeFrame, venomThemeLabel, venomThemeNumber, venomThemeText, formatVenomContextUsage, formatVenomFooter, formatVenomConsole, formatVenomTerminalBlock, VENOM_DEFAULTS, venomSectionTitle, venomTransmissionTitle, venomToolLine, venomCompletionLabel, formatVenomTelemetry, type VenomActivity } from "./venom-theme.ts";
 
 const renderLog = log.child("renderer");
 
@@ -310,7 +310,7 @@ export function registerTelegramRenderer(
     // Telegram HTML supports native preformatted blocks and blockquotes.
     // Only apply the richer layout to Blacksite; keep other presets unchanged.
     const terminal = isBlacksite
-      ? "<pre>" + entries.replaceAll("<code>", "").replaceAll("</code>", "") + "</pre>"
+      ? formatVenomTerminalBlock(entries)
       : entries;
     const transmission = progress.latest
       ? isBlacksite
