@@ -310,7 +310,7 @@ export function registerTelegramRenderer(
     // Telegram HTML supports native preformatted blocks and blockquotes.
     // Only apply the richer layout to Blacksite; keep other presets unchanged.
     const terminal = isBlacksite
-      ? "<pre>" + entries.replace(/<\\/?code>/g, "").replace(/&gt; /g, "") + "</pre>"
+      ? "<pre>" + entries.replaceAll("<code>", "").replaceAll("</code>", "") + "</pre>"
       : entries;
     const transmission = progress.latest
       ? isBlacksite
