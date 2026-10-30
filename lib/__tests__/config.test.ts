@@ -88,6 +88,24 @@ describe("materializeTelegramConfig", () => {
     expect(config.activeChatId).toBe(123);
   });
 
+  it("loads persisted group permissions, link preview preferences, and Venom appearance", () => {
+    const bot = makeBot();
+    const binding: ProjectTelegramBinding = {
+      botId: bot.id,
+      groupAccess: "public-mentions",
+      sessionIsolation: "shared",
+      groupJoinAlerts: true,
+      linkPreviews: false,
+      venomTheme: { title: "VENOM // LETHAL PROTECTOR", animation: "symbiote" },
+    };
+    const config = materializeTelegramConfig(bot, binding);
+    expect(config.groupAccess).toBe("public-mentions");
+    expect(config.sessionIsolation).toBe("shared");
+    expect(config.groupJoinAlerts).toBe(true);
+    expect(config.linkPreviews).toBe(false);
+    expect(config.venomTheme?.title).toBe("VENOM // LETHAL PROTECTOR");
+  });
+
   it("defaults enabled=true when binding file exists but enabled is absent", () => {
     const bot = makeBot();
     const binding: ProjectTelegramBinding = { botId: bot.id };
