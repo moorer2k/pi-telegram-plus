@@ -1,8 +1,8 @@
 import type { AgentSession, ExtensionUIContext } from "@earendil-works/pi-coding-agent";
 
-export type TelegramRenderLevel = "hidden" | "brief" | "full";
+export type TelegramRenderLevel = "hidden" | "brief" | "progress" | "full";
 
-export const RENDER_LEVELS: readonly TelegramRenderLevel[] = ["hidden", "brief", "full"] as const;
+export const RENDER_LEVELS: readonly TelegramRenderLevel[] = ["hidden", "brief", "progress", "full"] as const;
 
 /** Confirmation policy for Telegram-originated `!`/`!!` shell commands. */
 export type TelegramBashConfirm = "always" | "dangerous" | "never";
