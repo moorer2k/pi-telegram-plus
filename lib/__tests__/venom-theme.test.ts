@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { VENOM_PULSE_FRAMES, venomActivity, venomPulse, venomStatusLabel, formatHuntDuration, formatConsoleActivity, formatVenomConsole, venomThemeFrame, venomThemeLabel, venomThemeText, venomThemeNumber, formatVenomContextUsage, formatVenomFooter } from "../venom-theme.ts";
+import { VENOM_PULSE_FRAMES, venomActivity, venomPulse, venomStatusLabel, formatHuntDuration, formatConsoleActivity, formatVenomConsole, venomThemeFrame, venomThemeLabel, venomThemeText, venomThemeNumber, formatVenomContextUsage, formatVenomFooter, venomPreset, VENOM_PRESETS, venomSectionTitle, venomTransmissionTitle, venomToolLine, venomToolTag, formatVenomTelemetry, venomCompletionLabel } from "../venom-theme.ts";
 
 describe("Venom Lethal Protector presentation", () => {
   it("cycles through symbiote pulse frames without reporting fictional completion", () => {
@@ -68,6 +68,40 @@ describe("Venom Lethal Protector presentation", () => {
       .toBe("0 operations");
     expect(formatVenomFooter(2, 0, undefined, undefined, { showOperations: false, showElapsed: false }))
       .toBe("");
+  });
+
+
+  it("selects Blacksite and Minimal Terminal without changing the existing default", () => {
+    expect(venomPreset()).toBe("lethal-protector");
+    expect(venomThemeLabel("tracking")).toBe("Tracking");
+    expect(venomThemeLabel("tracking", { preset: "blacksite" })).toBe("TARGET ACQUIRED");
+    expect(venomThemeLabel("testing", { preset: "blacksite" })).toBe("VALIDATING TARGET");
+    expect(venomThemeLabel("testing", { preset: "blacksite", labels: { testing: "CHECKING" } })).toBe("CHECKING");
+    expect(venomSectionTitle({ preset: "blacksite" })).toBe("[ SYMBIOTE TERMINAL ]");
+    expect(venomTransmissionTitle({ preset: "blacksite" })).toBe("[ NEURAL LINK ]");
+    expect(venomThemeLabel("tracking", { preset: "minimal-terminal" })).toBe("Searching");
+    expect(VENOM_PRESETS.blacksite.labels.hunting).toBe("ACTIVE HUNT");
+  });
+
+  it("classifies real operations into accurate tactical tags", () => {
+    expect(venomToolTag("bash", { command: "rg foo src" })).toBe("RECON");
+    expect(venomToolTag("bash", { command: "npm test" })).toBe("VERIFY");
+    expect(venomToolTag("read", { path: "a.ts" })).toBe("READ");
+    expect(venomToolTag("edit", { path: "a.ts" })).toBe("PATCH");
+    expect(venomToolTag("bash", { command: "echo hello" })).toBe("EXEC");
+    expect(venomToolTag("read", {}, true)).toBe("ERROR");
+    expect(venomToolLine("read", {}, "read: lib/renderer.ts", { preset: "blacksite" }))
+      .toBe("[READ] lib/renderer.ts");
+    expect(venomToolLine("read", {}, "read: lib/renderer.ts"))
+      .toBe("read: lib/renderer.ts");
+  });
+
+  it("uses a complete two-line telemetry footer for Blacksite", () => {
+    expect(formatVenomTelemetry(3, 90_000, "21.8% / 98k", "qwen3.5-27b", { preset: "blacksite" }))
+      .toBe("3 OPS · 21.8% / 98k · qwen3.5-27b\\nHUNT TIME 1m 30s".replace("\\\\n", "\\n"));
+    expect(formatVenomTelemetry(3, 90_000, undefined, undefined, { preset: "blacksite", showElapsed: false }))
+      .toBe("3 OPS");
+    expect(venomCompletionLabel(false, { preset: "blacksite" })).toBe("HUNT COMPLETE // UNVERIFIED");
   });
 
   it("uses Lethal Protector state language", () => {
