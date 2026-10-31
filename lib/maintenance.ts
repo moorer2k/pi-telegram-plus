@@ -49,7 +49,7 @@ export function validatedVenomPhrases(phase: "before" | "after", prefs?: VenomRe
   const selected = prefs?.[phase];
   if (!Array.isArray(selected) || selected.length === 0 || selected.length > MAX_VENOM_PHRASES ||
       selected.some(value => typeof value !== "string" || !value.trim() ||
-        value.length > MAX_VENOM_PHRASE_LENGTH || /[\\x00-\\x1f\\x7f]/.test(value))) return [...defaults];
+        value.length > MAX_VENOM_PHRASE_LENGTH || /[\x00-\x1f\x7f]/.test(value))) return [...defaults];
   return [...new Set(selected)];
 }
 
