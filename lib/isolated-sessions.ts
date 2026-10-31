@@ -18,7 +18,6 @@ export class IsolatedSessionRegistry<T> {
   private readonly entries = new Map<string, Entry<T>>();
   private closed = false;
   private readonly owned = new Map<T, string>();
-  private readonly initializing = new Map<T, string>();
 
   constructor(
     private readonly create: (target: SessionTarget) => Promise<T>,
@@ -26,6 +25,11 @@ export class IsolatedSessionRegistry<T> {
   ) {}
 
   static key(target: SessionTarget): string {
+    if (!Number.isSafeInteger(target.chatId)) throw new Error("Invalid Telegram chat ID");
+    if (target.messageThreadId !== undefined &&
+      (!Number.isSafeInteger(target.messageThreadId) || target.messageThreadId <= 0)) {
+      throw new Error("Invalid Telegram topic ID");
+    }
     return JSON.stringify([target.chatId, target.messageThreadId ?? null]);
   }
 
@@ -37,8 +41,7 @@ export class IsolatedSessionRegistry<T> {
     entry.disposeOnce = entry.pending.then(
       async (session) => {
         if (this.owned.get(session) === key) this.owned.delete(session);
-        if (this.initializing.get(session) === key) this.initializing.delete(session);
-        if (this.owned.has(session) || this.initializing.has(session)) return;
+        if (this.owned.has(session)) return;
         await this.disposeSession(session);
       },
       () => undefined, // A rejected factory produced no session to dispose.
@@ -73,7 +76,7 @@ export class IsolatedSessionRegistry<T> {
       await this.retire(entry);
       throw new Error("Isolated session factory must return a unique session object");
     }
-    const existingOwner = this.owned.get(session) ?? this.initializing.get(session);
+    const existingOwner = this.owned.get(session);
     if (existingOwner && existingOwner !== key) {
       // Do not dispose an aliased session: another target still owns it.
       entry.retired = true;
