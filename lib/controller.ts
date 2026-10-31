@@ -2202,6 +2202,11 @@ export function createTelegramController(deps: {
     },
 
     dispose() {
+      // Release all paused dispatch tasks and invalidate their generations.
+      // A stopped controller must not dispatch messages after disposal.
+      for (const key of [...pausedQueues]) bumpInterruptGeneration(key);
+      for (const key of [...promptTails.keys()]) bumpInterruptGeneration(key);
+      seenIncomingMessages.clear();
       dialogBroker.stop();
       unsubscribeLocalTui();
       commandGateway.dispose();
