@@ -51,7 +51,7 @@ function createSession(streamingRef: { value: boolean }, idleRef: { value: boole
   return session;
 }
 
-function createController(session: any, sent: Array<{ text: string }>, ownedTurn = false) {
+function createController(session: any, sent: Array<{ text: string }>) {
   return createTelegramController({
     getSession: () => session,
     transport: {
@@ -80,7 +80,7 @@ function createController(session: any, sent: Array<{ text: string }>, ownedTurn
     setActiveChatId: async () => undefined,
     getBotUsername: () => "test-bot",
     telegramCommands: new Map(),
-    getActiveTurn: () => ownedTurn ? ({ chatId: 999, queuedAttachments: [] }) : undefined,
+    getActiveTurn: () => undefined,
     beginTelegramTurn: (chatId: number, replaceMessageId?: number) => ({ chatId, queuedAttachments: [], replaceMessageId }),
     endTelegramTurn: () => undefined,
   });
@@ -101,7 +101,7 @@ describe("TUI-parity message delivery", () => {
     const idleRef = { value: false }; // main turn running
     const prompts: Array<{ text: string; opts?: Record<string, unknown> }> = [];
     const sent: Array<{ text: string }> = [];
-    const controller = createController(createSession(streamingRef, idleRef, prompts), sent, true);
+    const controller = createController(createSession(streamingRef, idleRef, prompts), sent);
 
     await sendMessage(controller, "steer into main turn");
     await waitFor(() => prompts.length === 1);
@@ -150,7 +150,7 @@ describe("TUI-parity message delivery", () => {
     const idleRef = { value: true };
     const prompts: Array<{ text: string; opts?: Record<string, unknown> }> = [];
     const sent: Array<{ text: string }> = [];
-    const controller = createController(createSession(streamingRef, idleRef, prompts, false), sent, true);
+    const controller = createController(createSession(streamingRef, idleRef, prompts, false), sent);
 
     await sendMessage(controller, "fallback steer");
     await waitFor(() => prompts.length === 1);

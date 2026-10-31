@@ -3,7 +3,6 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { escapeHtml } from "./html.ts";
-import { prepareDraftPreview } from "./draft-preview.ts";
 import { markdownToTelegramHtml } from "./markdown.ts";
 import { richMarkdownForTables } from "./rich-message.ts";
 import type { TelegramConfig, TelegramRenderLevel, TelegramTransport, TelegramTurn } from "./types.ts";
@@ -500,55 +499,8 @@ export function registerTelegramRenderer(
     for (const event of events) await sendInlineEvent(event);
   };
 
-  // Native Telegram drafts provide low-flicker partial answers in private DMs.
-  // The existing message renderer remains authoritative for final delivery.
-  let draftSequence = 0;
-  let draftLastSent = 0;
-  let draftDisabled = false;
-  let draftBusy = false;
-  let draftTarget = "";
-  let draftGeneration = 0;
-  let draftId = 1;
-  (pi as any).on("message_update", async (event: any) => {
-    const turn = deps.getActiveTurn();
-    if (!turn || turn.chatId <= 0 || turn.messageThreadId !== undefined || !deps.transport.sendDraft || draftDisabled || draftBusy) return;
-    if (isBackgroundAgentActivity()) return;
-    const key = String(turn.chatId) + ":" + String(turn.sourceMessageId ?? "");
-    if (draftTarget !== key) return;
-    if (Date.now() - draftLastSent < 900) return;
-    const message = event?.message;
-    if (message?.role !== "assistant") return;
-    const rendered = contentToRenderParts(message.content, "hidden", "hidden");
-    const preview = redactFor(turn, rendered.body).trim();
-    if (!preview) return;
-    // Preserve the most recent output for long responses, without splitting
-    // a UTF-8 sequence or exceeding Telegram's draft payload limit.
-    const safe = prepareDraftPreview(preview);
-    draftBusy = true;
-    draftLastSent = Date.now();
-    const generation = draftGeneration;
-    const sendingId = draftId;
-    try {
-      // A prior preview can outlive its agent turn. Capture the draft ID and
-      // generation so a late failure cannot disable a subsequent turn.
-      await deps.transport.sendDraft(turn.chatId, sendingId, safe);
-    } catch (err) {
-      if (generation === draftGeneration) draftDisabled = true;
-      renderLog.warn("native draft unavailable; retaining normal message delivery", { chatId: turn.chatId, err });
-    } finally {
-      if (generation === draftGeneration) draftBusy = false;
-    }
-  });
-
   pi.on("agent_start", async () => {
     try {
-    const draftTurn = deps.getActiveTurn();
-    draftGeneration += 1;
-    draftBusy = false;
-    draftTarget = draftTurn ? String(draftTurn.chatId) + ":" + String(draftTurn.sourceMessageId ?? "") : "";
-    draftId = (++draftSequence % 2147483646) + 1;
-    draftDisabled = false;
-    draftLastSent = 0;
     sentInlineEvents.clear();
     toolArgs.clear();
     toolUpdateAt.clear();
@@ -769,9 +721,6 @@ ${partial}`);
   });
 
   pi.on("agent_end", async () => {
-    draftGeneration += 1;
-    draftTarget = "";
-    draftBusy = false;
     try {
       if (!progressMode() || !progress.target || progressTarget() !== progress.target) return;
       const turn = deps.getActiveTurn();

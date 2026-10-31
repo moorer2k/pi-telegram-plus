@@ -88,39 +88,3 @@ describe("createActiveTelegramTransport", () => {
         expect(editText).toHaveBeenCalledWith(42, 5, "<b>table</b>", "| a |\n| --- |\n| 1 |");
     });
 });
-
-
-describe("active transport draft forwarding", () => {
-    it("forwards native drafts only while active", async () => {
-        const base = createTransport([]);
-        const sendDraft = vi.fn(async () => undefined);
-        base.sendDraft = sendDraft;
-        let active = false;
-        const wrapped = createActiveTelegramTransport(base, { isActive: () => active });
-        expect(wrapped.sendDraft).toBeTypeOf("function");
-        await wrapped.sendDraft!(123, 1, "suppressed");
-        expect(sendDraft).not.toHaveBeenCalled();
-        active = true;
-        await wrapped.sendDraft!(123, 2, "visible");
-        expect(sendDraft).toHaveBeenCalledExactlyOnceWith(123, 2, "visible");
-    });
-
-    it("suppresses a draft when its lease expires before queued execution", async () => {
-        const base = createTransport([]);
-        const sendDraft = vi.fn(async () => undefined);
-        base.sendDraft = sendDraft;
-        let lease = 1;
-        let release!: () => void;
-        const gate = new Promise<void>((resolve) => { release = resolve; });
-        const wrapped = createActiveTelegramTransport(base, {
-            isActive: () => true,
-            getLease: () => lease,
-            waitUntilReady: () => gate,
-        });
-        const pending = wrapped.sendDraft!(123, 3, "stale");
-        lease = 2;
-        release();
-        await pending;
-        expect(sendDraft).not.toHaveBeenCalled();
-    });
-});
