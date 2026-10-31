@@ -324,7 +324,7 @@ export function registerTelegramRenderer(
     // Keep the symbiote pulse: fixed-width frames on their own line with no
     // changing label beside them. Stable title, status, trace, and footer slots.
     const pulse = theme?.showPulse === false ? "" :
-      "<code>" + (frame.pulse || "▱▱▱▱▱▱") + "</code>\n";
+      "<code>" + (frame.pulse || "▱".repeat(12)) + "</code>\n";
     const html = (role ? "<code>" + escapeHtml(role.trim()) + "</code>\n" : "") +
       "<b>" + escapeHtml(header) + "</b>\n" +
       "<b>" + escapeHtml(status) + "</b>\n" +

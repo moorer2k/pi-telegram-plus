@@ -149,3 +149,11 @@ For a fresh Telegram-originated turn in `Tool: progress` mode, the controller no
 The transport no longer disables Rich Messages globally because an individual edit failed with `message text is empty`. Only a definitive unknown `sendRichMessage` method error disables Rich globally for the process. A repeated animation frame may elicit `message is not modified`; that is treated as a successful no-op and **does not** downgrade the status message to HTML.
 
 To verify a live agent: the initial request should use `sendRichMessage`, followed by `editMessageText` requests with `rich_message` and no `parse_mode`. A log entry `Rich Message rejected; falling back to HTML` indicates a content- or edit-specific failure that must be investigated. The richer formatting is not active until this code is merged and the running plugin updated/restarted.
+
+## Width-stable Lethal Protector Rich HUD
+
+The live Rich status panel now includes a fixed **26-cell terminal-style divider** on every edit (including the initial progress placeholder), to reduce Telegram bubble-width changes as command output varies. The width anchor is a visual hint, not a Telegram API width guarantee. Tool excerpts are capped to 30 codepoints and model/telemetry lines to 32 to reduce unexpected wraps on mobile. If a phone's font or reply-gutter width is unusually narrow, the Telegram client may still reflow.
+
+The **symbiote pulse now has 12 segments**, rather than six, and still fills monotonically before starting over. It is an activity signal, never a fictional task-progress estimate. Pulse remains on its own line, below the status, with no moving text alongside it.
+
+Venom's Rich activity rows also distinguish live state without duplicating numeric tool totals: `◈` running, `◆` completed, `×` failed. Earlier traces keep a constant `<details>` slot throughout the turn, even before tools accumulate. The menu's explicit "collapse history: off" continues to hide that slot.
