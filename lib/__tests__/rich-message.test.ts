@@ -238,3 +238,19 @@ describe("fence parser regression", () => {
     expect(richMarkdownForResponse("```js\nconst a=1;\n````")).toContain("const a=1;");
   });
 });
+
+describe("incomplete inline Markdown recovery", () => {
+  it("keeps completed text before a partial link", () => {
+    expect(richMarkdownForDraft("Ready.\n[link](https://")).toBe("Ready.");
+  });
+  it("keeps completed text before unfinished inline code", () => {
+    expect(richMarkdownForDraft("Ready.\n`unfinished")).toBe("Ready.");
+  });
+  it("keeps completed text before unfinished inline math", () => {
+    expect(richMarkdownForDraft("Ready.\n$\\\\frac{1}{")).toBe("Ready.");
+  });
+  it("does not alter a complete mathematical final answer", () => {
+    const input = String.raw`\\(x^2 + y^2\\)`;
+    expect(richMarkdownForResponse(input)).toContain(input);
+  });
+});
