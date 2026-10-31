@@ -465,9 +465,10 @@ export function registerTelegramRenderer(
       await deps.transport.sendText(turn.chatId, html, turn.messageThreadId, turn.sourceMessageId, richMarkdown);
       return;
     }
-    // The placeholder cannot hold an HTML answer that large, but one Rich
-    // Message can (up to ~30k), so a table answer still lands in place.
-    if (options.final && !richMarkdown && Buffer.byteLength(html, "utf8") > EDIT_LIMIT) {
+    // Never edit an oversized final answer in place: when native Rich editing
+    // fails, the HTML edit path only takes the first chunk and loses the rest.
+    // Sending a new message lets native Rich work, with full HTML chunk fallback.
+    if (options.final && Buffer.byteLength(html, "utf8") > EDIT_LIMIT) {
       await deps.transport.editText(turn.chatId, turn.replaceMessageId, "🤖 <b>Assistant</b>\n\nFinal answer follows in separate message(s).").catch(renderLog.swallow("warn", "editText final-answer pointer failed", { chatId: turn.chatId, messageId: turn.replaceMessageId }));
       turn.replaceMessageId = undefined;
       await deps.transport.sendText(turn.chatId, html, turn.messageThreadId, turn.sourceMessageId, richMarkdown);
