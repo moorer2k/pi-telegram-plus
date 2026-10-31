@@ -328,11 +328,12 @@ export function registerTelegramRenderer(
     // Telegram HTML supports native preformatted blocks and blockquotes.
     // Only apply the richer layout to Blacksite; keep other presets unchanged.
     const terminal = isBlacksite
-      ? formatVenomTerminalBlock(entries)
+      ? formatVenomCompactOperations(progress.lines, escapeHtml, theme)
       : entries;
     const transmission = progress.latest
       ? isBlacksite
-        ? "\n<b>" + escapeHtml(venomTransmissionTitle(theme)) + "</b>\n<blockquote>" +
+        ? "\n\n<b>" + escapeHtml(venomTransmissionTitle(theme)) + "</b>\n" +
+          (progress.latest.length > 360 ? "<blockquote expandable>" : "<blockquote>") +
           escapeHtml(progress.latest.slice(0, previewLength)) + "</blockquote>"
         : preview
       : "";
@@ -355,7 +356,7 @@ export function registerTelegramRenderer(
       ? "<b>" + frame.eye + " " + escapeHtml(header) + "</b>\n" +
         "<b>" + escapeHtml(venomThemeLabel(progress.activity, theme)) + "</b> " +
         (theme?.showPulse === false || !frame.pulse ? "" : "<code>" + frame.pulse + "</code>") +
-        "\n\n<u>" + escapeHtml(section) + "</u>\n" + terminal +
+        "\n\n<b>" + escapeHtml(section) + "</b>\n" + terminal +
         transmission + "\n" + telemetry
       : "<b>" + frame.eye + " " + escapeHtml(header) + "</b>\n" +
         "<i>" + escapeHtml(venomThemeLabel(progress.activity, theme)) + "</i>\n" +
