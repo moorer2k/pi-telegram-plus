@@ -111,6 +111,14 @@ describe("final answer malformed table fallback", () => {
     expect(html).not.toContain("| --- |");
     expect(html).toContain("Fri");
     expect(html).toContain("Sat");
+    expect(html).toContain("Incomplete table data");
+  });
+  it("renders badly mismatched table headers as readable values", () => {
+    const malformed = "Outlook | Day | High | Rain | Wrong header | | --- | --- | --- | | Fri | 50° | 20% |";
+    const html = markdownToTelegramHtml(malformed);
+    expect(html).not.toContain("| --- |");
+    expect(html).toContain("Fri");
+    expect(html).toContain("20%");
   });
   it("preserves unrelated prose and fenced code", () => {
     const prose = "foo | bar | baz";
