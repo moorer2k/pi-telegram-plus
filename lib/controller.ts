@@ -986,6 +986,9 @@ export function createTelegramController(deps: {
 
   // Per chat/thread prompt queues: each Telegram topic chains independently.
   const promptTails = new Map<string, Promise<void>>();
+  // Pending counts exclude the currently executing prompt. The generation
+  // fence below invalidates queued work without interrupting an active turn.
+  const pendingPromptCounts = new Map<string, number>();
   // Increasing generation per chat/thread lets stop invalidate pending queue items.
   const interruptGenerationByTarget = new Map<string, number>();
 
@@ -1215,10 +1218,15 @@ export function createTelegramController(deps: {
     // messages are delivered to the main thread in order.
     const key = targetKey(chatId, messageThreadId);
     const generation = getInterruptGeneration(key);
+    pendingPromptCounts.set(key, (pendingPromptCounts.get(key) ?? 0) + 1);
     const task = getOrCreateTail(key)
-      .then(() => {
+      .then(async () => {
+        // The queued item is no longer pending once its dispatch slot starts.
+        const remaining = (pendingPromptCounts.get(key) ?? 1) - 1;
+        if (remaining > 0) pendingPromptCounts.set(key, remaining);
+        else pendingPromptCounts.delete(key);
         if (generation !== getInterruptGeneration(key)) return;
-        return runPrompt(text, chatId, replaceMessageId, messageThreadId, sourceMessageId);
+        await runPrompt(text, chatId, replaceMessageId, messageThreadId, sourceMessageId);
       })
       .catch((err) => reportPromptFailure("prompt-delivery", chatId, messageThreadId, sourceMessageId, err));
     setTail(key, task);
@@ -1701,6 +1709,20 @@ export function createTelegramController(deps: {
         return;
       }
       if (message.reply_to_message || message.quote || message.text_quote || message.external_reply) logTelegramReplyContext(message);
+      if (trimmed === "/queue" || trimmed === "/queue clear") {
+        const key = targetKey(chatId, messageThreadId);
+        const pending = pendingPromptCounts.get(key) ?? 0;
+        if (trimmed === "/queue clear") {
+          // Invalidate waiting messages only; leave the running turn alone.
+          bumpInterruptGeneration(key);
+          ctrlLog.info("telegram queue cleared", { chatId, messageThreadId, pending });
+          await deps.transport.sendText(chatId, `Cleared ${pending} queued message(s). Active work was not interrupted.`, messageThreadId, sourceMessageId);
+        } else {
+          const active = deps.getActiveTurn(chatId, messageThreadId) !== undefined;
+          await deps.transport.sendText(chatId, `Queue: ${pending} pending message(s). Active Telegram turn: ${active ? "yes" : "no"}. Use /queue clear to discard waiting messages.`, messageThreadId, sourceMessageId);
+        }
+        return;
+      }
       if (trimmed === "/stop") {
         // §4.5 rule 6: the dialog gets the Esc first, then the normal /stop path
         // runs (pending input, bash abort, turn interrupt).
