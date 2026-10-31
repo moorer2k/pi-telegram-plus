@@ -996,6 +996,7 @@ export function createTelegramController(deps: {
   // Per-target pause gates: no timers, no polling, and no cross-chat effects.
   const pausedQueues = new Set<string>();
   const pauseWaiters = new Map<string, Set<() => void>>();
+  let controllerDisposed = false;
   const resumeQueue = (key: string): boolean => {
     const wasPaused = pausedQueues.delete(key);
     const waiters = pauseWaiters.get(key);
@@ -1004,7 +1005,7 @@ export function createTelegramController(deps: {
     return wasPaused;
   };
   const waitForQueueResume = async (key: string): Promise<void> => {
-    while (pausedQueues.has(key)) {
+    while (!controllerDisposed && pausedQueues.has(key)) {
       await new Promise<void>((resolve) => {
         const waiters = pauseWaiters.get(key) ?? new Set<() => void>();
         waiters.add(resolve);
@@ -1049,7 +1050,7 @@ export function createTelegramController(deps: {
   };
   const getInterruptGeneration = (key: string): number => interruptGenerationByTarget.get(key) ?? 0;
   const pruneQueueState = (key: string): void => {
-    if (!promptTails.has(key) && !pendingPromptCounts.has(key)) {
+    if (!promptTails.has(key) && !pendingPromptCounts.has(key) && !pausedQueues.has(key)) {
       interruptGenerationByTarget.delete(key);
       pendingSourceMessages.delete(key);
       cancelledSourceMessages.delete(key);
@@ -1334,6 +1335,7 @@ export function createTelegramController(deps: {
     // Chain behind the previous prompt for this chat/thread so multiple
     // messages are delivered to the main thread in order.
     const key = targetKey(chatId, messageThreadId);
+    if (controllerDisposed) return false;
     // Bound queued work per topic to avoid unbounded memory growth when an
     // agent is stalled or a Telegram client floods messages.
     const pending = pendingPromptCounts.get(key) ?? 0;
@@ -1356,7 +1358,7 @@ export function createTelegramController(deps: {
         // A clear/stop invalidates the previous generation. Never subtract an
         // obsolete task from the count of messages queued after that clear.
         await waitForQueueResume(key);
-        if (generation !== getInterruptGeneration(key)) {
+        if (controllerDisposed || generation !== getInterruptGeneration(key)) {
           // A clear/stop already reset the visible pending count. Discard
           // stale cancellation tombstones as their old queue slots drain.
           if (sourceMessageId !== undefined) {
@@ -2202,10 +2204,12 @@ export function createTelegramController(deps: {
     },
 
     dispose() {
+      controllerDisposed = true;
       // Release all paused dispatch tasks and invalidate their generations.
       // A stopped controller must not dispatch messages after disposal.
       for (const key of [...pausedQueues]) bumpInterruptGeneration(key);
       for (const key of [...promptTails.keys()]) bumpInterruptGeneration(key);
+      for (const key of [...pauseWaiters.keys()]) resumeQueue(key);
       seenIncomingMessages.clear();
       dialogBroker.stop();
       unsubscribeLocalTui();
