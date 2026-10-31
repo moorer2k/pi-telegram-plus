@@ -662,7 +662,7 @@ ${partial}`);
   pi.on("message_update", async (event) => {
     try {
       if (!progressMode() || !progress.target || progressTarget() !== progress.target) return;
-      if (!draftEnabled || draftBusy || !deps.transport.sendRichDraft) return;
+      if (!draftEnabled || !deps.transport.sendRichDraft) return;
       const update = event as unknown as {
         message?: AnyMessage;
         assistantMessageEvent?: { type?: string; delta?: string };
@@ -671,6 +671,7 @@ ${partial}`);
       const delta = update.assistantMessageEvent.delta;
       if (!delta) return;
       draftPartial += delta;
+      if (draftBusy) return;
       const now = Date.now();
       if (now - draftLastAt < 1200) return;
       const turn = deps.getActiveTurn();
