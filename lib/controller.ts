@@ -1045,15 +1045,20 @@ export function createTelegramController(deps: {
         messageThreadId, sourceMessageId);
       return;
     }
-    await deps.transport.sendText(chatId, "⏹️ Interrupt requested.", messageThreadId, sourceMessageId);
+    // Never let a failed Telegram acknowledgement suppress the abort itself.
+    // Execute the abort first, then report the actual outcome.
     try {
       if (typeof (session as any).abort !== "function") {
         throw new Error("Pi session does not expose abort()");
       }
       await Promise.resolve((session as any).abort());
+      ctrlLog.info("telegram owned turn abort completed", { chatId, messageThreadId, pending });
+      await deps.transport.sendText(chatId, "⏹️ Abort requested; pending queue cleared.", messageThreadId, sourceMessageId)
+        .catch(ctrlLog.swallow("warn", "sendText abort acknowledgement failed", { chatId, messageThreadId }));
     } catch (err) {
       ctrlLog.error("telegram stop abort failed", { chatId, messageThreadId, err });
-      await deps.transport.sendText(chatId, "Could not abort the active turn. Check the Telegram error log.", messageThreadId, sourceMessageId);
+      await deps.transport.sendText(chatId, "Could not abort the active turn. Check the Telegram error log.", messageThreadId, sourceMessageId)
+        .catch(ctrlLog.swallow("warn", "sendText abort failure notice failed", { chatId, messageThreadId }));
     }
   };
 
