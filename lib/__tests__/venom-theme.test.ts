@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { VENOM_PULSE_FRAMES, venomActivity, venomPulse, venomStatusLabel, formatHuntDuration, formatConsoleActivity, formatVenomConsole, venomThemeFrame, venomThemeLabel, venomThemeText, venomThemeNumber, formatVenomContextUsage, formatVenomFooter, venomPreset, VENOM_PRESETS, venomSectionTitle, venomTransmissionTitle, venomToolLine, venomToolTag, formatVenomTelemetry, formatVenomTerminalBlock, formatVenomActivityHistory, formatVenomOperationState, isVenomHud, venomCompletionLabel } from "../venom-theme.ts";
+import { VENOM_PULSE_FRAMES, venomActivity, venomPulse, venomStatusLabel, formatHuntDuration, formatConsoleActivity, formatVenomConsole, venomThemeFrame, venomThemeLabel, venomThemeText, venomThemeNumber, formatVenomContextUsage, formatVenomFooter, venomPreset, VENOM_PRESETS, venomSectionTitle, venomTransmissionTitle, venomToolLine, venomToolTag, formatVenomTelemetry, formatVenomTerminalBlock, formatVenomActivityHistory, formatVenomOperationState, formatVenomLiveOperations, isVenomHud, venomCompletionLabel } from "../venom-theme.ts";
 
 describe("Venom Lethal Protector presentation", () => {
   it("cycles through symbiote pulse frames without reporting fictional completion", () => {
@@ -176,6 +176,48 @@ describe("Venom Lethal Protector presentation", () => {
     expect(expanded).toContain("<b>[VERIFY]</b>");
     expect(expanded).not.toContain("<pre>");
     expect(formatVenomActivityHistory(["[READ] <secret>"], esc)).toContain("&lt;secret&gt;");
+  });
+
+  it("renders fixed lifecycle slots with a consistent height through start and completion", () => {
+    const esc = (value: string) => value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+    const base = { id: "tool-1", tag: "EXEC", tool: "bash", detail: "git status", state: "running" as const, startedAt: 1000 };
+    const opts = { visibleOperations: 3, fixedOperationRows: true, collapseOperations: "off" } as const;
+    const countLines = (ops: typeof base[]) => formatVenomLiveOperations(ops, esc, opts).split("\n").length;
+    expect(countLines([])).toBe(6);
+    expect(countLines([base])).toBe(6);
+    const running = formatVenomLiveOperations([base], esc, opts);
+    expect(running).toContain("EXEC · ACTIVE");
+    expect(running).toContain("git status");
+    const done = formatVenomLiveOperations([{ ...base, state: "done", finishedAt: 2400 }], esc, opts);
+    expect(done).toContain("EXEC · DONE 1.4s");
+    expect(done.split("\n")).toHaveLength(6);
+    expect(done).not.toContain("operations ·");
+  });
+
+  it("renders failures and collapses only older structured traces", () => {
+    const esc = (value: string) => value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+    const ops = Array.from({ length: 4 }, (_, i) => ({
+      id: String(i), tag: i === 1 ? "ERROR" : "READ", tool: "read",
+      detail: i === 1 ? "<private>" : "src/" + i,
+      state: i === 1 ? "failed" as const : "done" as const,
+      startedAt: 1000, finishedAt: 2000,
+    }));
+    const opts = { visibleOperations: 2, collapseOperations: "expandable" } as const;
+    const html = formatVenomLiveOperations(ops, esc, opts);
+    expect(html).toContain("<blockquote expandable>");
+    expect(html).toContain("2 EARLIER TRACES");
+    expect(html).toContain("&lt;private&gt;");
+    expect(html).not.toContain("<pre>");
+    expect(formatVenomLiveOperations(ops.slice(-2), esc, opts)).not.toContain("<blockquote");
+    expect(formatVenomLiveOperations(ops, esc, { ...opts, collapseOperations: "off" })).not.toContain("<blockquote");
+  });
+
+  it("clamps long command details without changing fixed-row count", () => {
+    const op = { id: "1", tag: "EXEC", tool: "bash", detail: "a".repeat(400), state: "running" as const, startedAt: 0 };
+    const result = formatVenomLiveOperations([op], x => x, { visibleOperations: 1 });
+    expect(result.split("\n")).toHaveLength(2);
+    expect(result.length).toBeLessThan(100);
+    expect(result).toContain("…");
   });
 
   it("reports only actual operation states", () => {
