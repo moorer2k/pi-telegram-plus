@@ -284,6 +284,53 @@ export function normalizeWrappedFlattenedTables(markdown: string): string {
   }
   return out.join("\n");
 }
+/** Last-resort readable cards for table-like pipe output that cannot be
+ * recovered into valid GFM. Never invent missing cells or modify code fences.
+ * This is an output safety net, not a replacement for native Rich tables. */
+export function fallbackMalformedPipeTables(markdown: string): string {
+  const lines = markdown.split("\n");
+  const out: string[] = [];
+  let inFence = false;
+  let fenceChar = "";
+  for (const line of lines) {
+    const fence = fenceMarker(line);
+    if (fence) {
+      if (!inFence) { inFence = true; fenceChar = fence; }
+      else if (fence === fenceChar) { inFence = false; fenceChar = ""; }
+      out.push(line);
+      continue;
+    }
+    if (inFence || !line.includes("|")) { out.push(line); continue; }
+    const firstPipe = line.indexOf("|");
+    const prefix = line.slice(0, firstPipe).trim();
+    const cells = line.slice(firstPipe + 1).split("|").map(x => x.trim()).filter(Boolean);
+    const isSep = (cell: string) => /^:?-{2,}:?$/.test(cell);
+    // Require at least two adjacent separators. Without them this might be
+    // code, prose with pipes, a URL, or an ordinary aligned data fragment.
+    const sep = cells.findIndex((cell, i) => i >= 2 && isSep(cell) && isSep(cells[i + 1] ?? ""));
+    if (sep < 2 || sep > 6) { out.push(line); continue; }
+    let sepEnd = sep;
+    while (sepEnd < cells.length && isSep(cells[sepEnd])) sepEnd++;
+    const width = sepEnd - sep;
+    if (width < 2 || width > 6 || sep !== width || cells.length <= sepEnd) { out.push(line); continue; }
+    const headers = cells.slice(0, width);
+    const values = cells.slice(sepEnd);
+    if (!headers.every(Boolean) || !values.length) { out.push(line); continue; }
+    const newLines: string[] = prefix ? [prefix, ""] : [];
+    // Vertical key/value cards are guaranteed readable even if a model
+    // drops a pipe or a row. Do not pad missing values with made-up data.
+    for (let index = 0; index < values.length; index += width) {
+      const row = values.slice(index, index + width);
+      newLines.push("**" + headers[0] + ": " + row[0] + "**");
+      for (let col = 1; col < row.length; col++) {
+        newLines.push("- **" + headers[col] + ":** " + row[col]);
+      }
+      newLines.push("");
+    }
+    out.push(newLines.join("\n").trimEnd());
+  }
+  return out.join("\n");
+}
 /** Separate a tight bullet group from trailing prose even when the model
  * omitted the blank line. Require at least two consecutive top-level bullets
  * to avoid turning an intentional single-item continuation into a paragraph.
@@ -622,7 +669,7 @@ export function markdownToTelegramHtml(markdown: string): string {
   // marked renders them as <pre><code> — preserving column alignment in
   // Telegram's monospace font instead of mangling pipes in a proportional-font
   // paragraph. Real markdown tables (with a separator) are left for marked.
-  const protected_ = protectPseudoTables(normalizeWrappedFlattenedTables(normalizeListParagraphSpacing(markdown)));
+  const protected_ = protectPseudoTables(fallbackMalformedPipeTables(normalizeWrappedFlattenedTables(normalizeListParagraphSpacing(markdown))));
   return (marked.parse(protected_, { async: false }) as string).replace(/\n+$/, "");
 }
 
