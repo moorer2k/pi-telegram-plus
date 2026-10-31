@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdir, readFile, rm } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join, sep } from "node:path";
 import { tmpdir } from "node:os";
-import { createTelegramTransport, __resetRichMessagesForTests } from "../telegram-api.ts";
+import { createTelegramTransport, __resetRichMessagesForTests, downloadTelegramFile } from "../telegram-api.ts";
 import type { TelegramConfig } from "../types.ts";
 import { __drainAndListFiles, __resetSinkForTests, initLogger } from "../logger.ts";
 
@@ -36,6 +36,46 @@ async function readTodayLog(dir: string): Promise<string> {
   if (!base) return "";
   return readFile(base, "utf8");
 }
+
+describe("local Bot API attachment downloads", () => {
+  let priorFetch: FetchImpl;
+  beforeEach(() => { priorFetch = globalThis.fetch; });
+  afterEach(() => { globalThis.fetch = priorFetch; });
+
+  it("reads absolute getFile paths directly from a loopback --local API", async () => {
+    const dir = join(tmpdir(), "tg-local-" + Math.random().toString(36).slice(2));
+    const path = join(dir, "photo.png");
+    await mkdir(dir, { recursive: true });
+    await writeFile(path, Buffer.from([1, 2, 3, 4]));
+    const mockFetch = vi.fn();
+    globalThis.fetch = mockFetch as unknown as FetchImpl;
+    try {
+      const data = await downloadTelegramFile("token", path, undefined, "http://127.0.0.1:8081");
+      expect(data).toEqual(Buffer.from([1, 2, 3, 4]));
+      expect(mockFetch).not.toHaveBeenCalled();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects absolute local paths from non-loopback Bot API endpoints", async () => {
+    const mockFetch = vi.fn();
+    globalThis.fetch = mockFetch as unknown as FetchImpl;
+    await expect(downloadTelegramFile("token", "/tmp/private", undefined, "https://api.telegram.org"))
+      .rejects.toThrow(/API endpoint is not local/);
+    await expect(downloadTelegramFile("token", "/tmp/private", undefined, "https://other.example"))
+      .rejects.toThrow(/API endpoint is not local/);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("keeps HTTP file downloads for ordinary relative file_path responses", async () => {
+    const mockFetch = vi.fn(async () => new Response(Buffer.from([9, 8]), { status: 200 }));
+    globalThis.fetch = mockFetch as unknown as FetchImpl;
+    const data = await downloadTelegramFile("token", "photos/file 1.jpg", undefined, "http://localhost:8081");
+    expect(data).toEqual(Buffer.from([9, 8]));
+    expect(mockFetch.mock.calls[0]?.[0]).toBe("http://localhost:8081/file/bottoken/photos/file%201.jpg");
+  });
+});
 
 describe("createTelegramTransport — network-failure suppression & logging", () => {
   let originalFetch: FetchImpl;
