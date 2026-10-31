@@ -998,6 +998,9 @@ export function createTelegramController(deps: {
   const bumpInterruptGeneration = (key: string): void => {
     const next = getInterruptGeneration(key) + 1;
     interruptGenerationByTarget.set(key, next);
+    // Invalidate the visible pending depth immediately. Older queued tasks
+    // retain their captured generation and will be discarded at dispatch.
+    pendingPromptCounts.delete(key);
   };
 
   const fastInterrupt = async (chatId: number, messageThreadId?: number, sourceMessageId?: number) => {
@@ -1222,10 +1225,15 @@ export function createTelegramController(deps: {
     const task = getOrCreateTail(key)
       .then(async () => {
         // The queued item is no longer pending once its dispatch slot starts.
+        // A clear/stop invalidates the previous generation. Never subtract an
+        // obsolete task from the count of messages queued after that clear.
+        if (generation !== getInterruptGeneration(key)) {
+          ctrlLog.info("queued telegram prompt discarded", { chatId, messageThreadId, sourceMessageId, reason: "generation invalidated" });
+          return;
+        }
         const remaining = (pendingPromptCounts.get(key) ?? 1) - 1;
         if (remaining > 0) pendingPromptCounts.set(key, remaining);
         else pendingPromptCounts.delete(key);
-        if (generation !== getInterruptGeneration(key)) return;
         await runPrompt(text, chatId, replaceMessageId, messageThreadId, sourceMessageId);
       })
       .catch((err) => reportPromptFailure("prompt-delivery", chatId, messageThreadId, sourceMessageId, err));
