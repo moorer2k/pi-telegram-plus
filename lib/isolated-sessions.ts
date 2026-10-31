@@ -17,6 +17,7 @@ type Entry<T> = {
 export class IsolatedSessionRegistry<T> {
   private readonly entries = new Map<string, Entry<T>>();
   private closed = false;
+  private readonly owned = new Map<T, string>();
 
   constructor(
     private readonly create: (target: SessionTarget) => Promise<T>,
@@ -33,7 +34,10 @@ export class IsolatedSessionRegistry<T> {
     const key = IsolatedSessionRegistry.key(entry.target);
     if (this.entries.get(key) === entry) this.entries.delete(key);
     entry.disposeOnce = entry.pending.then(
-      (session) => this.disposeSession(session),
+      async (session) => {
+        if (this.owned.get(session) === key) this.owned.delete(session);
+        await this.disposeSession(session);
+      },
       () => undefined, // A rejected factory produced no session to dispose.
     );
     return entry.disposeOnce;
@@ -62,11 +66,23 @@ export class IsolatedSessionRegistry<T> {
       });
     }
     const session = await entry.pending;
+    if (session === null || (typeof session !== "object" && typeof session !== "function")) {
+      await this.retire(entry);
+      throw new Error("Isolated session factory must return a unique session object");
+    }
+    const existingOwner = this.owned.get(session);
+    if (existingOwner && existingOwner !== key) {
+      // Do not dispose an aliased session: another target still owns it.
+      entry.retired = true;
+      if (this.entries.get(key) === entry) this.entries.delete(key);
+      throw new Error("Isolated session factory returned a session already owned by another target");
+    }
     if (this.closed || entry.retired || this.entries.get(key) !== entry) {
       // The releasing caller owns disposal. Never dispose a shared
       // initialization result twice when multiple get() calls are waiting.
       throw new Error("Session was released during initialization");
     }
+    this.owned.set(session, key);
     return { target: { ...entry.target }, session };
   }
 
