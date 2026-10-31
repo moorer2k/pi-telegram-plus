@@ -19,6 +19,7 @@ import type { TelegramUiRuntime } from "./telegram-ui.ts";
 import type { TuiBridgeAdapter } from "./tui-bridge.ts";
 import { tuiBridge as defaultTuiBridge, hostOwnsPrompts } from "./tui-bridge.ts";
 import { escapeHtml } from "./html.ts";
+import { formatVenomRichInitialPanel } from "./venom-theme.ts";
 import { recordCommandUsage } from "./command-usage.ts";
 import { getTelegramMenuOverflow } from "./menu-commands.ts";
 import { log } from "./logger.ts";
@@ -1107,7 +1108,7 @@ export function createTelegramController(deps: {
           "<b>VENOM // LETHAL PROTECTOR</b>\n<b>LINK ESTABLISHED</b>",
           messageThreadId,
           sourceMessageId,
-          "**VENOM // LETHAL PROTECTOR**\n\nLINK ESTABLISHED\n\n`▱▱▱▱▱▱`\n\n## SYMBIOTE ACTIVITY\n\n- Awaiting target",
+          formatVenomRichInitialPanel(deps.getConfig?.().venomTheme),
         );
         turn.replaceMessageId = sent[0]?.message_id;
       }
@@ -1175,7 +1176,7 @@ export function createTelegramController(deps: {
           "<b>VENOM // LETHAL PROTECTOR</b>\n<b>LINK ESTABLISHED</b>",
           messageThreadId,
           sourceMessageId,
-          "**VENOM // LETHAL PROTECTOR**\n\nLINK ESTABLISHED\n\n`▱▱▱▱▱▱`\n\n## SYMBIOTE ACTIVITY\n\n- Awaiting target",
+          formatVenomRichInitialPanel(deps.getConfig?.().venomTheme),
         );
             turn.replaceMessageId = sent[0]?.message_id;
           }
