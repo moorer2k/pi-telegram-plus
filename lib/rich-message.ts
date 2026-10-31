@@ -39,7 +39,8 @@ export function normalizeRichMathDelimiters(markdown: string): string {
   let fence: { marker: string; width: number } | undefined;
   let inDisplay = false;
   let inInline = false;
-  return markdown.split("\n").map((line) => {
+  const lines = markdown.split("\n");
+  return lines.map((line, lineIndex) => {
     const fm = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
     if (fm) {
       const token = fm[1];
@@ -59,7 +60,7 @@ export function normalizeRichMathDelimiters(markdown: string): string {
       if (index % 2 === 1) return segment;
       return segment.replace(/(?<!\\)\\(\[|\]|\(|\))/g, (match, delimiter) => {
         if (delimiter === "[") {
-          if (inInline || inDisplay) return match;
+          if (inInline || inDisplay || !lines.slice(lineIndex).join("\\n").includes("\\\\]")) return match;
           inDisplay = true;
           return "$$";
         }
