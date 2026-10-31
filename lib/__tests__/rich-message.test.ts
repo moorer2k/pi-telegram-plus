@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hasGfmTable, normalizeFlattenedTables, markdownToTelegramHtml } from "../markdown.ts";
+import { hasGfmTable, normalizeFlattenedTables, normalizeWrappedFlattenedTables, markdownToTelegramHtml } from "../markdown.ts";
 import { escapeRichMarkdown, richMarkdownForTables, TELEGRAM_RICH_TEXT_LIMIT } from "../rich-message.ts";
 
 const TABLE = [
@@ -58,6 +58,35 @@ describe("flattened table recovery", () => {
     const incomplete = "Summary | Name | Count | | --- | --- |";
     expect(normalizeFlattenedTables(incomplete)).toBe(incomplete);
     expect(richMarkdownForTables(incomplete)).toBeUndefined();
+  });
+});
+describe("wrapped flattened GFM tables", () => {
+  const source = [
+    "Next 3 days | Date | Low / High | Outlook |",
+    "|-----|----------|------------| | Today (Oct 30) | 39 / 52°F | Cloudy, cool |",
+    "| Oct 31 | 37 / 55°F | Slightly warmer, dry | | Nov 1 | 39 / 54°F | Same band, dry |",
+  ].join("\n");
+  it("recovers header, separator and data split across source lines", () => {
+    const recovered = normalizeWrappedFlattenedTables(source);
+    expect(recovered).toContain("| Date | Low / High | Outlook |\n| ----- | ---------- | ------------ |");
+    expect(recovered).toContain("| Today (Oct 30) | 39 / 52°F | Cloudy, cool |");
+    expect(recovered).toContain("| Nov 1 | 39 / 54°F | Same band, dry |");
+    expect(hasGfmTable(recovered)).toBe(true);
+  });
+  it("routes recovered rows to native Rich and renders structured HTML fallback", () => {
+    const rich = richMarkdownForTables(source);
+    expect(rich).toContain("| Oct 31 | 37 / 55°F | Slightly warmer, dry |");
+    const html = markdownToTelegramHtml(source);
+    expect(html).toContain("Today (Oct 30)");
+    expect(html).not.toContain("|-----|");
+  });
+  it("does not join already valid tables or unrelated prose", () => {
+    const table = "| Day | Hi |\n| --- | --- |\n| Fri | 53 |";
+    expect(normalizeWrappedFlattenedTables(table)).toBe(table);
+    const prose = "What | about | this?\nSomething else";
+    expect(normalizeWrappedFlattenedTables(prose)).toBe(prose);
+    const fenced = "```md\n" + source + "\n```";
+    expect(normalizeWrappedFlattenedTables(fenced)).toBe(fenced);
   });
 });
 describe("escapeRichMarkdown", () => {
