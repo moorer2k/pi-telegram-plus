@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { inlineMarkdownToHtml, markdownToTelegramHtml } from "../markdown.ts";
+import { inlineMarkdownToHtml, markdownToTelegramHtml, normalizeListParagraphSpacing } from "../markdown.ts";
 
 describe("inlineMarkdownToHtml", () => {
   it("converts **bold** to <b>", () => {
@@ -65,6 +65,36 @@ describe("inlineMarkdownToHtml", () => {
   });
 });
 
+describe("list-to-paragraph spacing", () => {
+  const screenshot = ["**Hay, Washington — overcast**", "", "- Humidity: 80%",
+    "- Wind: 3 mph", "- Precip: none right now",
+    "We smell the damp pine up here — cold and grey."].join("\n");
+
+  it("separates unindented prose after several tight bullet items", () => {
+    const normalized = normalizeListParagraphSpacing(screenshot);
+    expect(normalized).toContain("- Precip: none right now\n\nWe smell the damp pine");
+    const html = markdownToTelegramHtml(screenshot);
+    expect(html).toContain("- Precip: none right now\n\nWe smell the damp pine");
+  });
+
+  it("preserves explicit paragraph spacing without doubling it", () => {
+    const input = "- One\n- Two\n\nAfter the list";
+    expect(normalizeListParagraphSpacing(input)).toBe(input);
+    expect(markdownToTelegramHtml(input)).toContain("- Two\n\nAfter the list");
+  });
+
+  it("preserves a single-item list continuation rather than guessing", () => {
+    const input = "- One\ncontinuation line";
+    expect(normalizeListParagraphSpacing(input)).toBe(input);
+  });
+
+  it("does not touch nested list continuations or fenced examples", () => {
+    const nested = "- One\n- Two\n  wrapped content";
+    expect(normalizeListParagraphSpacing(nested)).toBe(nested);
+    const fence = "```md\n- One\n- Two\nAfter\n```";
+    expect(normalizeListParagraphSpacing(fence)).toBe(fence);
+  });
+});
 describe("markdownToTelegramHtml", () => {
   // ── Headings ──
 
