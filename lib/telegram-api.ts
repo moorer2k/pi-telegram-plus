@@ -295,6 +295,10 @@ export function createTelegramTransport(
     apiLog.warn(`HTML ${label} rejected; falling back to plain text`, { reason, snippet });
   };
 
+  /** A missing edit target is not a formatting or Rich capability failure. */
+  const isMissingEditTarget = (err: unknown): boolean =>
+    err instanceof TelegramApiRequestError && /message to edit not found|message not found|message can't be edited|message cannot be edited/i.test(err.message);
+
   /** Note a rejected Rich Message attempt. A definitive "this server has no
    *  Rich Messages" disables the feature process-wide, so later tables do not
    *  pay a failed request each; content-specific rejections keep it enabled. */
@@ -431,14 +435,17 @@ export function createTelegramTransport(
         parse_mode: "HTML",
         link_preview_options: { is_disabled: true },
       }, undefined, lease).catch((err) => {
-        if (isNetworkError(err)) return; // swallow; nothing useful to retry
+        if (isMissingEditTarget(err) || isNetworkError(err)) throw err;
         warnHtmlFallback("editMessageText", err, first);
         return callApi("editMessageText", {
           chat_id: chatId,
           message_id: messageId,
           text: stripHtml(first),
           link_preview_options: { is_disabled: true },
-        }, undefined, lease).catch(apiLog.swallow("debug", "editMessageText plain-text fallback failed", { chatId, messageId }));
+        }, undefined, lease).catch(err => {
+          if (isMissingEditTarget(err) || isNetworkError(err)) throw err;
+          apiLog.debug("editMessageText plain-text fallback failed", { chatId, messageId, err });
+        });
       });
     },
 
