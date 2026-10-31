@@ -88,14 +88,94 @@ async function checkoutPath(): Promise<string> {
   return root;
 }
 
-/** Update only the known installed checkout. Never interpolate shell arguments. */
-export async function updateVenomCheckout(): Promise<{ fromSha: string; toSha: string }> {
+export type VenomUpdateStrategy = "fast-forward" | "rebase" | "use-remote";
+export type VenomUpdateRelation = "current" | "behind" | "ahead" | "diverged";
+export type VenomUpdatePlan = {
+  relation: VenomUpdateRelation;
+  localOnly: number;
+  remoteOnly: number;
+  localSha: string;
+  remoteSha: string;
+};
+
+export function classifyVenomUpdate(localOnly: number, remoteOnly: number): VenomUpdateRelation {
+  if (localOnly > 0 && remoteOnly > 0) return "diverged";
+  if (localOnly > 0) return "ahead";
+  if (remoteOnly > 0) return "behind";
+  return "current";
+}
+
+/** Only the expected clean, master checkout may be inspected/updated. */
+export async function inspectVenomUpdate(): Promise<VenomUpdatePlan> {
   const root = await checkoutPath();
-  const fromSha = await run("git", ["rev-parse", "HEAD"], root);
   await run("git", ["fetch", "--no-tags", "origin", "master"], root);
-  await run("git", ["merge", "--ff-only", "FETCH_HEAD"], root);
+  const localSha = await run("git", ["rev-parse", "HEAD"], root);
+  const remoteSha = await run("git", ["rev-parse", "FETCH_HEAD"], root);
+  const counts = await run("git", ["rev-list", "--left-right", "--count", "HEAD...FETCH_HEAD"], root);
+  const [left, right] = counts.split(/\s+/).map(Number);
+  if (!Number.isSafeInteger(left) || !Number.isSafeInteger(right)) {
+    throw new Error("Unable to determine local and remote Git history.");
+  }
+  return { relation: classifyVenomUpdate(left, right), localOnly: left,
+    remoteOnly: right, localSha, remoteSha };
+}
+
+export type VenomUpdateResult = {
+  fromSha: string;
+  toSha: string;
+  backupRef?: string;
+};
+
+/** Snapshot the original commit before any history rewrite or reset. */
+async function backupVenomCommit(root: string, sha: string): Promise<string> {
+  const stamp = new Date().toISOString().replace(/[-:.TZ]/g, "");
+  const backup = "backup/venom-" + stamp + "-" + randomInt(1_000_000).toString(36);
+  await run("git", ["branch", backup, sha], root);
+  return backup;
+}
+
+/** Update a known checkout. Divergence requires an explicit selected strategy.
+ * Rebase conflicts are aborted to restore the original branch automatically. */
+export async function updateVenomCheckout(
+  strategy: VenomUpdateStrategy = "fast-forward",
+  expected?: VenomUpdatePlan,
+): Promise<VenomUpdateResult> {
+  const plan = await inspectVenomUpdate();
+  if (expected && (plan.localSha !== expected.localSha || plan.remoteSha !== expected.remoteSha)) {
+    throw new Error("Git history changed since confirmation. Review update options again.");
+  }
+  const root = await checkoutPath();
+  if (plan.relation === "current") return { fromSha: plan.localSha, toSha: plan.localSha };
+  if (plan.relation === "ahead" && strategy === "fast-forward") {
+    throw new Error("Local plugin commits are ahead of GitHub. Select a backup-and-reconcile option.");
+  }
+  if (plan.relation === "diverged" && strategy === "fast-forward") {
+    throw new Error("Local and GitHub histories diverged. Select Rebase, Use GitHub master, or Cancel.");
+  }
+
+  // Preserve local commits before replaying or discarding their branch tip.
+  const backupRef = plan.localOnly > 0 ? await backupVenomCommit(root, plan.localSha) : undefined;
+  if (strategy === "use-remote") {
+    // Explicitly selected and confirmed in owner-private menu. Backup is durable.
+    await run("git", ["reset", "--hard", plan.remoteSha], root);
+  } else if (strategy === "rebase" && plan.localOnly > 0) {
+    try {
+      await run("git", ["rebase", plan.remoteSha], root);
+    } catch (error) {
+      try {
+        await run("git", ["rebase", "--abort"], root);
+      } catch (abortError) {
+        throw new Error("Rebase failed and automatic abort also failed. Git recovery is required. Backup: " +
+          backupRef + ". " + String(abortError));
+      }
+      throw new Error("Rebase encountered conflicts; the original branch was restored. Backup: " +
+        backupRef + ". " + (error instanceof Error ? error.message : String(error)));
+    }
+  } else if (plan.remoteOnly > 0) {
+    await run("git", ["merge", "--ff-only", plan.remoteSha], root);
+  }
   const toSha = await run("git", ["rev-parse", "HEAD"], root);
-  return { fromSha, toSha };
+  return { fromSha: plan.localSha, toSha, backupRef };
 }
 
 async function writeMarker(marker: RestartMarker): Promise<void> {
@@ -112,17 +192,20 @@ export async function updateAndRestartVenom(
   botId: string,
   transport: Pick<TelegramTransport, "sendText">,
   phrases?: VenomRestartPhrases,
-): Promise<{ fromSha: string; toSha: string }> {
+  strategy: VenomUpdateStrategy = "fast-forward",
+  expected?: VenomUpdatePlan,
+): Promise<VenomUpdateResult> {
   const service = getMaintenanceService();
   if (!service) throw new Error("Automatic restart is not configured: set PI_TELEGRAM_RESTART_UNIT to the running systemd .service unit.");
   const flags = service.scope === "user" ? ["--user"] : ["--system"];
   const status = await run("systemctl", [...flags, "is-active", service.unit]);
   if (status !== "active") throw new Error("The configured systemd service is not active.");
 
-  const result = await updateVenomCheckout();
+  const result = await updateVenomCheckout(strategy, expected);
   const phrase = venomRestartPhrase("before", phrases);
   await transport.sendText(chatId, "<b>VENOM // EVOLUTION PROTOCOL</b>\n" +
-    escapeHtml(phrase) + "\n<code>" + result.toSha.slice(0, 9) + "</code> · Restarting Pi-Bolt");
+    escapeHtml(phrase) + "\n<code>" + result.toSha.slice(0, 9) + "</code> · Restarting Pi-Bolt" +
+    (result.backupRef ? "\nBackup: <code>" + escapeHtml(result.backupRef) + "</code>" : ""));
   await writeMarker({
     botId, chatId, previousPid: process.pid, createdAt: Date.now(),
     fromSha: result.fromSha, toSha: result.toSha, phrase,

@@ -1471,6 +1471,9 @@ export function createTelegramController(deps: {
       await deps.transport.sendText(chatId, "π session is not ready yet.", messageThreadId, sourceMessageId);
       return true;
     }
+    if (parsed.name.toLowerCase() === "tg") {
+      ctrlLog.info("Telegram /tg menu requested", { chatId, messageThreadId, sourceMessageId, origin: "message" });
+    }
     return await dispatchNamedCommand(parsed.name.toLowerCase(), parsed.args, session, chatId, messageThreadId, sourceMessageId);
   };
 
@@ -1561,6 +1564,16 @@ export function createTelegramController(deps: {
       }
 
       if (data) {
+        // Unknown/stale callback payloads are not command invocations.
+        // A previous menu button can outlive its UI flow; never interpret
+        // arbitrary callback data such as "/tg" as a new management command.
+        if (data.trim().startsWith("/")) {
+          ctrlLog.warn("discarded unrecognized slash callback", {
+            chatId, messageId: sourceMessageId, payload: data.slice(0, 64),
+          });
+          await deps.transport.sendText(chatId, "This command button has expired. Use the Telegram command menu.", messageThreadId, sourceMessageId);
+          return;
+        }
         const messageId = query.message?.message_id;
         await submitText(data, chatId, messageId, messageThreadId, sourceMessageId);
       }
