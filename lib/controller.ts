@@ -1020,14 +1020,19 @@ export function createTelegramController(deps: {
   };
 
   const fastInterrupt = async (chatId: number, messageThreadId?: number, sourceMessageId?: number) => {
+    const key = targetKey(chatId, messageThreadId);
+    const pending = pendingPromptCounts.get(key) ?? 0;
     const session = deps.getSession();
     if (!session) {
-      await deps.transport.sendText(chatId, "π session is not ready yet.", messageThreadId, sourceMessageId);
+      // A disconnected Pi session must not prevent the owner of a queue
+      // from discarding stale pending Telegram instructions.
+      bumpInterruptGeneration(key);
+      await deps.transport.sendText(chatId,
+        `Pi session unavailable. Cleared ${pending} queued message(s) for this chat/topic.`,
+        messageThreadId, sourceMessageId);
       return;
     }
 
-    const key = targetKey(chatId, messageThreadId);
-    const pending = pendingPromptCounts.get(key) ?? 0;
     const ownedTurn = deps.getActiveTurn(chatId, messageThreadId);
     // Pi's abort() is session-global. A chat without the active turn must
     // never terminate work initiated by a different Telegram chat/topic or
@@ -1042,7 +1047,10 @@ export function createTelegramController(deps: {
     }
     await deps.transport.sendText(chatId, "⏹️ Interrupt requested.", messageThreadId, sourceMessageId);
     try {
-      await Promise.resolve((session as any).abort?.());
+      if (typeof (session as any).abort !== "function") {
+        throw new Error("Pi session does not expose abort()");
+      }
+      await Promise.resolve((session as any).abort());
     } catch (err) {
       ctrlLog.error("telegram stop abort failed", { chatId, messageThreadId, err });
       await deps.transport.sendText(chatId, "Could not abort the active turn. Check the Telegram error log.", messageThreadId, sourceMessageId);
