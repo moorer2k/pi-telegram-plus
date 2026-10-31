@@ -54,6 +54,11 @@ export function createActiveTelegramTransport(
                 transport.sendDraft!(chatId, draftId, text)
             )),
         } : {}),
+        ...(transport.setReaction ? {
+            setReaction: (chatId: number, messageId: number, emoji: string) => run<void>(undefined, () => (
+                transport.setReaction!(chatId, messageId, emoji)
+            )),
+        } : {}),
         sendChatAction: (chatId, action, messageThreadId) => run<void>(undefined, () => (
             transport.sendChatAction(chatId, action, messageThreadId)
         )),
