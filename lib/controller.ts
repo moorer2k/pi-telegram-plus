@@ -1206,13 +1206,16 @@ export function createTelegramController(deps: {
     } catch {
       mainBusy = session.isStreaming;
     }
-    const isSteer = mainBusy;
+    // A shared Pi session can be busy with another Telegram topic or the
+    // local TUI. Never steer a message into a turn owned by another target.
+    // Only an existing turn belonging to this chat/topic may be steered.
+    const isSteer = mainBusy && deps.getActiveTurn(chatId, messageThreadId) !== undefined;
 
     // While the main loop is idle, hold the message until it settles, then
     // submit a plain prompt so the message always starts a fresh main-thread
     // turn; it is never steered or queued into a background workflow agent's
     // turn.
-    if (!mainBusy) {
+    if (!isSteer) {
       await runMainDelivery(text, chatId, replaceMessageId, messageThreadId, sourceMessageId);
       return;
     }
