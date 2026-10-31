@@ -674,6 +674,25 @@ ${partial}`);
       const messageText = body.trim();
       progress.messages = appendProgressMessage(progress.messages, messageText);
       progress.latest = messageText;
+      // Best-effort native draft preview. Never let a rejected draft interfere
+      // with the existing Venom HUD or final-message delivery.
+      const turnForDraft = deps.getActiveTurn();
+      if (turnForDraft && deps.transport.sendRichDraft && progress.messages.length > 0) {
+        const draftText = progress.messages.join("\\n\\n");
+        const nativeDraft = richMarkdownForResponse(draftText);
+        if (nativeDraft) {
+          try {
+            await deps.transport.sendRichDraft(
+              turnForDraft.chatId,
+              Math.max(1, Math.abs(turnForDraft.replaceMessageId ?? 1)),
+              nativeDraft,
+              turnForDraft.messageThreadId,
+            );
+          } catch (err) {
+            renderLog.debug("native Rich draft unavailable; Venom HUD remains active", { err });
+          }
+        }
+      }
       await updateProgress(true);
     } else if (hasBody) {
       // A Markdown table cannot be expressed in Telegram's HTML mode, so the
