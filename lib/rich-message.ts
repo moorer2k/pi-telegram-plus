@@ -61,6 +61,18 @@ export function richMarkdownForTables(markdown: string): string | undefined {
  * fenced code or attempt a rich edit with unbalanced fences.
  * Unsupported API servers use the existing HTML fallback.
  */
+/** Streaming previews must not expose unfinished Markdown constructs. */
+export function richMarkdownForDraft(markdown: string): string | undefined {
+  const lines = markdown.split("\n");
+  let safe = lines.join("\n");
+  // A trailing partial code fence or unfinished inline code is not renderable.
+  if (!/(?:\n|^)$/.test(safe) && /(?:^|\n)\s*(?:`{1,2}|`{3,}|~{3,})[^\n]*$/.test(safe)) {
+    safe = lines.slice(0, -1).join("\n");
+  }
+  if (!safe.trim()) return undefined;
+  return richMarkdownForResponse(safe);
+}
+
 export function richMarkdownForResponse(markdown: string): string | undefined {
   if (!markdown.trim() || !hasBalancedFences(markdown)) return undefined;
   const normalized = normalizeWrappedFlattenedTables(normalizeListParagraphSpacing(markdown));
