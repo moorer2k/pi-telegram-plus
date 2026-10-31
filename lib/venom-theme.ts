@@ -405,7 +405,7 @@ export function formatVenomRichLivePanel(
   options: VenomThemeOptions | undefined,
   meta: { title: string; status: string; pulse: string; section: string; transmission: string; objective: string; model: string; metrics: string },
 ): string {
-  const escaped = (input: string): string => input.replace(/&/g, "&amp;").replace(/</g, "&lt;")
+  const escaped = (input: string): string => input.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
     .replace(/([\\*_~\`#[\]()!|])/g, "\\$1").replace(/\r?\n/g, " ");
   const count = venomThemeNumber(options?.visibleOperations, 3, 1, 12);
   const recent = operations.slice(-count);
