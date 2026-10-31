@@ -46,6 +46,16 @@ describe("group sender identity and explicit trusted IDs", () => {
     expect(trustedGroupMember([exampleMember], "123456789")).toBeUndefined();
   });
 
+  it("distinguishes paired owner from a trusted participant by actual Telegram sender ID", () => {
+    const owner = { id: 987654321, first_name: "Moore", username: "moore" };
+    const ownerHeader = telegramGroupPromptHeader(owner, undefined, owner.id);
+    expect(ownerHeader).toContain("paired owner Moore (@moore) (ID: 987654321)");
+    expect(ownerHeader).not.toContain("unpaired sender");
+    const participantHeader = telegramGroupPromptHeader(from, exampleMember, owner.id);
+    expect(participantHeader).toContain("trusted participant Example Member");
+    expect(participantHeader).not.toContain("from the paired owner");
+  });
+
   it("fails closed on unavailable IDs, control characters and spoofed delimiter names", () => {
     expect(validTelegramUserId(-123)).toBe(false);
     expect(validTelegramUserId(Number.MAX_SAFE_INTEGER + 1)).toBe(false);
