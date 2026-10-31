@@ -388,12 +388,9 @@ export function formatVenomLiveOperations(
  * The ordinary HTML HUD remains the fallback for Bot API servers without Rich.
  * Never interpolate unescaped tool contents into Markdown or HTML.
  */
-/** Constant visual floor to discourage Telegram from shrinking the bubble.
- * Twenty-six monospace cells fit typical phone widths with a reply quote gutter.
- * Not a guarantee: Telegram owns the final bubble sizing. */
-export const VENOM_RICH_WIDTH_ANCHOR = "━".repeat(26);
-const VENOM_RICH_DETAIL_WIDTH = 30;
-const VENOM_RICH_META_WIDTH = 32;
+/** Compact dynamic fields avoid forcing Telegram into unpredictable soft wraps. */
+const VENOM_RICH_DETAIL_WIDTH = 24;
+const VENOM_RICH_META_WIDTH = 30;
 
 function venomRichShort(value: string, max: number): string {
   const clean = value.replace(/\s+/g, " ").trim();
@@ -420,15 +417,20 @@ export function formatVenomRichLivePanel(
     const duration = op.state !== "running" && op.finishedAt !== undefined
       ? " " + (Math.max(0, op.finishedAt - op.startedAt) / 1000).toFixed(1) + "s" : "";
     const state = options?.showOperationStates === false ? "" : " · " + op.state.toUpperCase() + duration;
-    const detail = venomRichShort(op.detail || op.tool, VENOM_RICH_DETAIL_WIDTH);
+    // The tool name is already shown as a tag; omit repeated "bash:" or
+    // "terminal:" prefixes. Backticks prevent URLs from becoming clickable
+    // rich links (a major source of unexpected Android line wrapping).
+    const raw = (op.detail || op.tool).replace(/^(?:bash|terminal|exec):\\s*/i, "");
+    const detail = venomRichShort(raw, VENOM_RICH_DETAIL_WIDTH);
     const glyph = op.state === "failed" ? "×" : op.state === "done" ? "◆" : "◈";
-    return "- **" + glyph + " " + tag + escaped(state) + "**\n  " + escaped(detail);
+    return "**" + glyph + " " + tag + escaped(state) + "**\n" +
+      "`" + escaped(detail.replaceAll("`", "'")) + "`";
   };
   const slots = [...recent.map(line)];
   if (options?.fixedOperationRows !== false) {
-    for (let i = slots.length; i < count; i++) slots.push("- **TRACE · IDLE**\n  awaiting operation");
+    for (let i = slots.length; i < count; i++) slots.push("**◈ TRACE · IDLE**\n`awaiting operation`");
   }
-  if (!slots.length) slots.push("- Awaiting target");
+  if (!slots.length) slots.push("**◈ TRACE · IDLE**\n`awaiting operation`");
 
   // Always reserve the same collapsed history slot, so a fourth tool doesn't
   // suddenly insert a new section. Keep the summary short and constant;
@@ -441,14 +443,13 @@ export function formatVenomRichLivePanel(
       : "No earlier traces") +
     "\n\n</details>";
 
-  // The anchor establishes the same minimum visible line width on every frame.
-  // The animated twelve-segment pulse retains its independent line immediately
-  // below; it does not attempt to communicate percent task completion.
+  // No artificial width-filling divider: it cannot guarantee Telegram bubble
+  // dimensions and visibly competes with the actual symbiote pulse.
   return "**" + escaped(venomRichShort(meta.title, 38)) + "**\n\n" +
     "\`" + VENOM_RICH_WIDTH_ANCHOR + "\`\n\n" +
     "**◈ " + escaped(venomRichShort(meta.status, 32)) + "**\n\n" +
     (options?.showPulse === false ? "" : "\`" + (meta.pulse || "▱".repeat(VENOM_PULSE_WIDTH)) + "\`\n\n") +
-    "## " + escaped(meta.section) + "\n\n" + slots.join("\n") + history +
+    "## " + escaped(meta.section) + "\n\n" + slots.join("\n\n") + history +
     (options?.showObjective === false ? "" :
       "\n\n## " + escaped(meta.transmission) + "\n\n" + escaped(venomRichShort(meta.objective, VENOM_RICH_META_WIDTH))) +
     "\n\n" + escaped(venomRichShort(meta.model, VENOM_RICH_META_WIDTH)) +
