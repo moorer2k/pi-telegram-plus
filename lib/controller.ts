@@ -1804,7 +1804,7 @@ export function createTelegramController(deps: {
       if (isGroup && policy === "owner-mentions" && !ownerAuthorized && !recognized) return;
       // Isolation is not enabled merely by selecting a config flag. The host
       // must provide a separate session factory and routing integration.
-      if (isGroup && deps.getConfig?.().sessionIsolation === "per-chat") {
+      if (deps.getConfig?.().sessionIsolation === "per-chat") {
         await deps.transport.sendText(
           chatId,
           "Per-chat sessions are not available in this host runtime yet.",
