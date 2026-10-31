@@ -220,3 +220,21 @@ describe("streaming draft Markdown recovery", () => {
     expect(richMarkdownForResponse(String.raw`\\(x^2 + y^2\\) and $$\\frac{1}{2}$$`)).toContain(String.raw`\\frac{1}{2}`);
   });
 });
+
+describe("fence parser regression", () => {
+  it("rejects mismatched fence types", () => {
+    expect(richMarkdownForResponse("~~~js\nconst a=1;\n```")).toBeUndefined();
+  });
+  it("rejects a shorter closing fence", () => {
+    expect(richMarkdownForResponse("````js\nconst a=1;\n```")).toBeUndefined();
+  });
+  it("ignores fence-looking text inside an open fenced block", () => {
+    expect(richMarkdownForResponse("```text\n~~~\n```")).toContain("~~~");
+  });
+  it("retains complete prose before an unfinished block", () => {
+    expect(richMarkdownForDraft("Ready.\n\n~~~js\nconst a=1;")).toBe("Ready.");
+  });
+  it("accepts a longer valid closing fence", () => {
+    expect(richMarkdownForResponse("```js\nconst a=1;\n````")).toContain("const a=1;");
+  });
+});
