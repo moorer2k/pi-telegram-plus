@@ -377,7 +377,7 @@ export function formatVenomLiveOperations(
     "<code>› TRACE · IDLE</code>\n<code>  awaiting operation</code>") : [];
   const rows = [...recent.map(row), ...blanks];
   const visible = rows.length ? rows.join("\n") : "<i>Awaiting target</i>";
-  if (options?.collapseOperations !== "expandable" || older.length === 0) return visible;
+  if (options?.collapseOperations === "off" || older.length === 0) return visible;
   const history = older.slice(-16).map(op =>
     escape(truncate(op.tag + " " + op.state + " " + op.detail, 84))).join("\n");
   const omitted = Math.max(0, older.length - 16);
