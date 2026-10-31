@@ -989,6 +989,10 @@ export function createTelegramController(deps: {
   // Pending counts exclude the currently executing prompt. The generation
   // fence below invalidates queued work without interrupting an active turn.
   const pendingPromptCounts = new Map<string, number>();
+  // Pending source message IDs enable precise cancellation without aborting
+  // the active turn or discarding other queued instructions.
+  const pendingSourceMessages = new Map<string, Set<number>>();
+  const cancelledSourceMessages = new Map<string, Set<number>>();
   // Telegram may redeliver a message after reconnect/failover. Bound the
   // dedup cache so long-lived bots cannot accumulate unbounded message IDs.
   const seenIncomingMessages = new Map<string, number>();
@@ -1028,6 +1032,8 @@ export function createTelegramController(deps: {
   const pruneQueueState = (key: string): void => {
     if (!promptTails.has(key) && !pendingPromptCounts.has(key)) {
       interruptGenerationByTarget.delete(key);
+      pendingSourceMessages.delete(key);
+      cancelledSourceMessages.delete(key);
     }
   };
   const bumpInterruptGeneration = (key: string): void => {
@@ -1036,6 +1042,8 @@ export function createTelegramController(deps: {
     // Invalidate the visible pending depth immediately. Older queued tasks
     // retain their captured generation and will be discarded at dispatch.
     pendingPromptCounts.delete(key);
+    pendingSourceMessages.delete(key);
+    cancelledSourceMessages.delete(key);
     pruneQueueState(key);
   };
 
@@ -1317,6 +1325,11 @@ export function createTelegramController(deps: {
     }
     const generation = getInterruptGeneration(key);
     pendingPromptCounts.set(key, pending + 1);
+    if (sourceMessageId !== undefined) {
+      const ids = pendingSourceMessages.get(key) ?? new Set<number>();
+      ids.add(sourceMessageId);
+      pendingSourceMessages.set(key, ids);
+    }
     const task = getOrCreateTail(key)
       .then(async () => {
         // The queued item is no longer pending once its dispatch slot starts.
@@ -1325,6 +1338,16 @@ export function createTelegramController(deps: {
         if (generation !== getInterruptGeneration(key)) {
           ctrlLog.info("queued telegram prompt discarded", { chatId, messageThreadId, sourceMessageId, reason: "generation invalidated" });
           return;
+        }
+        if (sourceMessageId !== undefined) {
+          pendingSourceMessages.get(key)?.delete(sourceMessageId);
+          if (pendingSourceMessages.get(key)?.size === 0) pendingSourceMessages.delete(key);
+          const cancelled = cancelledSourceMessages.get(key);
+          if (cancelled?.delete(sourceMessageId)) {
+            if (cancelled.size === 0) cancelledSourceMessages.delete(key);
+            ctrlLog.info("queued telegram prompt individually cancelled", { chatId, messageThreadId, sourceMessageId });
+            return;
+          }
         }
         const remaining = (pendingPromptCounts.get(key) ?? 1) - 1;
         if (remaining > 0) pendingPromptCounts.set(key, remaining);
@@ -1907,6 +1930,29 @@ export function createTelegramController(deps: {
           ctrlLog.error("telegram message reaction failed", { chatId, messageThreadId, targetMessageId, err });
           await deps.transport.sendText(chatId, "Reaction failed. The emoji may be unsupported or the bot lacks permission.", messageThreadId, sourceMessageId);
         }
+        return;
+      }
+      if (trimmed === "/queue cancel" || trimmed.startsWith("/queue cancel ")) {
+        const key = targetKey(chatId, messageThreadId);
+        const argument = trimmed.slice("/queue cancel".length).trim();
+        const target = argument ? Number(argument) : message.reply_to_message?.message_id;
+        if (!Number.isSafeInteger(target) || (target ?? 0) <= 0) {
+          await deps.transport.sendText(chatId, "Usage: reply to a queued message with /queue cancel, or use /queue cancel <message_id>.", messageThreadId, sourceMessageId);
+          return;
+        }
+        if (!pendingSourceMessages.get(key)?.has(target!)) {
+          await deps.transport.sendText(chatId, "That message is not pending in this chat/topic.", messageThreadId, sourceMessageId);
+          return;
+        }
+        pendingSourceMessages.get(key)!.delete(target!);
+        const cancelled = cancelledSourceMessages.get(key) ?? new Set<number>();
+        cancelled.add(target!);
+        cancelledSourceMessages.set(key, cancelled);
+        const remaining = Math.max(0, (pendingPromptCounts.get(key) ?? 1) - 1);
+        if (remaining) pendingPromptCounts.set(key, remaining);
+        else pendingPromptCounts.delete(key);
+        ctrlLog.info("telegram queued message cancelled", { chatId, messageThreadId, targetMessageId: target });
+        await deps.transport.sendText(chatId, "Queued message cancelled. Active work was not interrupted.", messageThreadId, sourceMessageId);
         return;
       }
       if (trimmed === "/queue" || trimmed === "/queue clear" || trimmed === "/queue all") {
