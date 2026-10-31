@@ -52,6 +52,26 @@ describe("telegram ui menu() edit-in-place", () => {
     expect(transport.removeInlineKeyboard).toHaveBeenCalledWith(CHAT, 100);
   });
 
+  it("opens one input prompt after the participant add menu is selected", async () => {
+    const env = setup();
+    const { transport, ui, runtime } = env;
+
+    const menu = ui.menu("Trusted group participants", ["Add participant", "Back"]);
+    await press(env, 100, "Add participant");
+    expect(await menu).toBe("Add participant");
+
+    const prompt = ui.input("Telegram numerical user ID");
+    await vi.waitFor(() => expect(transport.sendButtons).toHaveBeenCalledTimes(2));
+    expect(transport.sendButtons.mock.calls[1]?.[1]).toContain("Telegram numerical user ID");
+    expect(transport.sendButtons.mock.calls.filter((call) =>
+      call[1].includes("Telegram numerical user ID"))).toHaveLength(1);
+
+    const resolution = runtime.resolveInput(CHAT, "123456789", 101, false);
+    expect(resolution.handled).toBe(true);
+    expect(await prompt).toBe("123456789");
+    expect(transport.sendButtons).toHaveBeenCalledTimes(2);
+  });
+
   it("another prompt releases the menu so the next menu renders as a new message", async () => {
     const env = setup();
     const { transport, ui } = env;

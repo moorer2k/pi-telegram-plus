@@ -757,6 +757,11 @@ function isDialogExemptText(text: string): boolean {
   return parseLeadingCommand(trimmed) !== undefined;
 }
 
+/** Plugin management owns Telegram-native prompt sequences; host mirroring duplicates input dialogs. */
+export function useHostPromptsForCommand(commandName: string, hostDialogsAvailable: boolean): boolean {
+  return commandName !== "tg" && hostDialogsAvailable;
+}
+
 export function createTelegramController(deps: {
   getSession: () => CapturedAgentSession | undefined;
   transport: TelegramTransport;
@@ -1240,7 +1245,11 @@ export function createTelegramController(deps: {
     const ctx = session.extensionRunner.createCommandContext();
     // Whether the host - rather than the plugin - answers prompts raised by this
     // command's own work (§4.2.6 item 2).
-    const hostPrompts = promptUiMode() === "host";
+    // /tg owns an in-place Telegram menu and follow-up text prompts. Sending its
+    // input/select/confirm calls through the host DialogBroker can mirror a
+    // second copy of the same question alongside the native Telegram prompt.
+    // Keep the entire plugin-management flow in one Telegram UI runtime.
+    const hostPrompts = useHostPromptsForCommand(label, promptUiMode() === "host");
     // §4.3 rule 1: while a Telegram-issued command runs, the dialogs it opens
     // belong to this chat. Without a scope the broker tracks them silently
     // (§4.3 rule 3) and the chat is left with a raw key mirror - no typed
@@ -1291,7 +1300,7 @@ export function createTelegramController(deps: {
       // the broker attribute it to this chat, and the broker's keyboard is the
       // one the chat sees - no screen mirror, which could not take typed text,
       // hide a secret answer, or withdraw itself once the terminal answered.
-      uiMode: promptUiMode(),
+      uiMode: hostPrompts ? "host" : "telegram-native",
       run: async () => {
         try {
           await handler(args, commandCtx);
