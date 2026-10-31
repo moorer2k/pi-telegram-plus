@@ -152,8 +152,16 @@ To verify a live agent: the initial request should use `sendRichMessage`, follow
 
 ## Width-stable Lethal Protector Rich HUD
 
-The live Rich status panel now includes a fixed **26-cell terminal-style divider** on every edit (including the initial progress placeholder), to reduce Telegram bubble-width changes as command output varies. The width anchor is a visual hint, not a Telegram API width guarantee. Tool excerpts are capped to 30 codepoints and model/telemetry lines to 32 to reduce unexpected wraps on mobile. If a phone's font or reply-gutter width is unusually narrow, the Telegram client may still reflow.
+The experimental fixed-width divider was removed: it created visual clutter without controlling Telegram's native bubble width. Venom now constructs typed Rich blocks for headings, tool state, command excerpts, and collapsed history. The 12-cell symbiote pulse remains the only long horizontal visual element.
 
 The **symbiote pulse now has 12 segments**, rather than six, and still fills monotonically before starting over. It is an activity signal, never a fictional task-progress estimate. Pulse remains on its own line, below the status, with no moving text alongside it.
 
 Venom's Rich activity rows also distinguish live state without duplicating numeric tool totals: `◈` running, `◆` completed, `×` failed. Earlier traces keep a constant `<details>` slot throughout the turn, even before tools accumulate. The menu's explicit "collapse history: off" continues to hide that slot.
+
+## Structured Rich document engine
+
+The live HUD is now assembled by `lib/venom-rich-doc.ts` rather than hand-concatenating one Markdown string in the theme renderer. It emits typed blocks (heading, text, code, details), keeps the 12-cell symbiote pulse, and preserves theme-specific headings.
+
+Command excerpts drop repeated tool prefixes and summarize long URLs/paths before rendering. The Rich transport sets `skip_entity_detection: true` for native Rich sends and edits, preventing unexpected automatic link detection in the live panel. Content is escaped, code formatted and bounded. Older trace history is capped to 16 entries and reduced before any recent tool/status content when the Rich message approaches its size budget.
+
+This design reduces unpredictable wrapping, but cannot set or guarantee Telegram bubble pixel width. It reuses the existing Telegram API transport; no Python service or external dependency is required.
