@@ -317,6 +317,13 @@ export function fallbackMalformedPipeTables(markdown: string): string {
     const values = cells.slice(sepEnd);
     if (!headers.every(Boolean) || !values.length) { out.push(line); continue; }
     const newLines: string[] = prefix ? [prefix, ""] : [];
+    // Missing pipe delimiters make column attribution ambiguous. Keep every
+    // original value in order rather than attaching data to the wrong header.
+    if (values.length % width !== 0) {
+      newLines.push("**Incomplete table data**", values.join(" · "));
+      out.push(newLines.join("\n").trimEnd());
+      continue;
+    }
     // Vertical key/value cards are guaranteed readable even if a model
     // drops a pipe or a row. Do not pad missing values with made-up data.
     for (let index = 0; index < values.length; index += width) {
