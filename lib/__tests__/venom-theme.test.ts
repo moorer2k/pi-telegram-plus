@@ -11,7 +11,7 @@ describe("Venom Lethal Protector presentation", () => {
 
   it("sweeps from empty to full before resetting with no backwards steps", () => {
     const fills = VENOM_PULSE_FRAMES.map(frame => [...frame.pulse].filter(ch => ch === "▰").length);
-    expect(fills).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    expect(fills).toEqual(Array.from({ length: VENOM_PULSE_WIDTH + 1 }, (_, i) => i));
     expect(venomPulse(VENOM_PULSE_FRAMES.length).pulse).toBe(VENOM_PULSE_FRAMES[0].pulse);
   });
 
