@@ -17,7 +17,7 @@ export type VenomRestartPhrases = {
 /** Optional project-local visual settings for the Venom progress card. */
 export type VenomThemeOptions = {
   /** Visual language preset; explicit text overrides still take precedence. */
-  preset?: "lethal-protector" | "blacksite" | "minimal-terminal";
+  preset?: "lethal-protector" | "blacksite" | "minimal-terminal" | "symbiote-hud" | "predator-terminal" | "classified";
   title?: string;
   sectionTitle?: string;
   transmissionTitle?: string;
@@ -29,6 +29,16 @@ export type VenomThemeOptions = {
   animation?: "symbiote" | "spinner" | "static";
   animationIntervalMs?: number;
   visibleOperations?: number;
+  /** Earlier operations: omit them or include as a native expandable quote. */
+  collapseOperations?: "off" | "expandable";
+  /** Use terse status tags rather than verbose tool commands. */
+  operationDetail?: "compact" | "full";
+  /** Show a live completed/running/failed operation summary. */
+  showOperationStates?: boolean;
+  /** Show the latest assistant objective when available. */
+  showObjective?: boolean;
+  /** Footer style: one compact line or normal multiline telemetry. */
+  footerDensity?: "compact" | "normal";
   previewLength?: number;
   showElapsed?: boolean;
   showOperations?: boolean;
