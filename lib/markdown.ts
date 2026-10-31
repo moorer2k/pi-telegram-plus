@@ -693,7 +693,9 @@ export function markdownToTelegramHtml(markdown: string): string {
   // Telegram's monospace font instead of mangling pipes in a proportional-font
   // paragraph. Real markdown tables (with a separator) are left for marked.
   const protected_ = protectPseudoTables(fallbackMalformedPipeTables(normalizeWrappedFlattenedTables(normalizeListParagraphSpacing(markdown))));
-  return (marked.parse(protected_, { async: false }) as string).replace(/\n+$/, "");
+  // Explicitly enable GFM for each render. Other extensions may configure
+  // the shared marked singleton and disable table tokenization globally.
+  return (marked.parse(protected_, { async: false, gfm: true }) as string).replace(/\n+$/, "");
 }
 
 export function escapeAttr(text: string): string {
