@@ -304,6 +304,18 @@ After confirmation Venom sends a random Lethal Protector shutdown phrase and the
 
 This update mechanism does not run automatically on startup. No Telegram chat participant other than the paired owner can trigger it.
 
+### Diverged local and GitHub histories
+
+The update menu checks the installed `master` checkout against the latest `origin/master` before restarting. If the local branch contains commits that GitHub does not, the paired owner sees:
+
+- **Rebase local commits onto GitHub master** — creates a timestamped `backup/venom-...` branch first, replays local commits onto GitHub, and automatically attempts `git rebase --abort` on conflicts. A failed rebase does **not** restart the service.
+- **Use GitHub master** — creates the same recoverable backup branch, then performs a confirmed `git reset --hard` to the fetched GitHub commit. This discards the local commits from active `master`, not from the backup branch.
+- **Cancel update** — changes nothing.
+
+A separate confirmation shows both the local-only and GitHub-only commit counts. If Git history changes after the menu was opened, the update aborts and asks the owner to retry. Clean working tree, expected Git origin, `master` branch and systemd configuration are still mandatory. No uncommitted modifications are automatically stashed or discarded.
+
+**Bootstrap:** Existing installations with a diverged checkout cannot pull this improved updater through their old fast-forward-only menu. Update that installation manually once (with a backup/rebase or a separately confirmed reset), then restart Pi-Bolt. Subsequent divergent updates can use the menu.
+
 ### Customize Venom restart messages
 
 Use `/tg → Config → Venom restart phrases`. The menu has **Before restart** and **After restart** lists. Each list displays all configured phrases and allows **Add phrase**, selecting an existing phrase to **Delete this phrase** (with confirmation), and **Restore default phrases** (with confirmation).

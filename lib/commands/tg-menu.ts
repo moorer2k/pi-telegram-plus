@@ -13,7 +13,7 @@ import { configVenomThemeFlow } from "./tg-venom-theme.ts";
 import { configVenomPhrasesFlow } from "./tg-venom-phrases.ts";
 import { getCurrentTelegramTurn } from "../turn-context.ts";
 import { checkpointCurrentUpdateCursor } from "../polling.ts";
-import { updateAndRestartVenom, getMaintenanceService } from "../maintenance.ts";
+import { updateAndRestartVenom, getMaintenanceService, inspectVenomUpdate, type VenomUpdateStrategy } from "../maintenance.ts";
 import { configToolFlow, configThinkingFlow, configRetryFlow, configBashFlow, configGroupAccessFlow, configSessionIsolationFlow, configGroupJoinAlertsFlow } from "./tg-config.ts";
 import { formatPairingInstructions } from "../pairing.ts";
 import { formatDebugReport } from "./info.ts";
@@ -195,16 +195,33 @@ async function mainMenu(
         ui.notify("Automatic restart needs PI_TELEGRAM_RESTART_UNIT configured to the active Pi-Bolt systemd .service unit.", "error");
         continue;
       }
-      const confirmed = await ui.confirm(
-        "Update plugin and restart Pi-Bolt?",
-        "Fetch and fast-forward moorer2k/pi-telegram-plus master, then restart " + service.unit +
-        ". Active tasks will be interrupted. Continue?",
-      );
-      if (!confirmed) continue;
       try {
+        const plan = await inspectVenomUpdate();
+        let strategy: VenomUpdateStrategy = "fast-forward";
+        if (plan.localOnly > 0) {
+          const selected = await pick(ui,
+            "Git history: " + plan.relation + " (" + plan.localOnly + " local / " +
+              plan.remoteOnly + " GitHub-only commits)",
+            ["Rebase local commits onto GitHub master (backup first)",
+             "Use GitHub master (backup local commits first)", "Cancel update"]);
+          if (!selected || selected === "Cancel update") continue;
+          strategy = selected.startsWith("Rebase") ? "rebase" : "use-remote";
+        }
+        const description = strategy === "rebase"
+          ? "Back up the current branch, then replay local commits on GitHub master. On conflicts, abort and preserve the original branch."
+          : strategy === "use-remote"
+            ? "Back up the current branch, then replace local master with GitHub master. Local commits remain recoverable from the backup branch."
+            : "Fetch and fast-forward the installed plugin to GitHub master.";
+        const confirmed = await ui.confirm(
+          "Update plugin and restart Pi-Bolt?",
+          description + "\n" + plan.localOnly + " local-only / " + plan.remoteOnly +
+          " GitHub-only commits. Active tasks will be interrupted. Restart " + service.unit + "?",
+        );
+        if (!confirmed) continue;
         // Checkpoint the Telegram callback before process termination.
         await checkpointCurrentUpdateCursor();
-        await updateAndRestartVenom(turn.chatId, botId, deps.transport, deps.getConfig().venomRestartPhrases);
+        await updateAndRestartVenom(turn.chatId, botId, deps.transport,
+          deps.getConfig().venomRestartPhrases, strategy, plan);
         throw new MenuClosed();
       } catch (error) {
         if (error instanceof MenuClosed) throw error;

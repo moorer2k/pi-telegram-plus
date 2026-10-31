@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, rm, writeFile, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { getMaintenanceService, venomRestartPhrase, deliverVenomRestartNotice } from "../maintenance.ts";
+import { getMaintenanceService, venomRestartPhrase, deliverVenomRestartNotice, classifyVenomUpdate } from "../maintenance.ts";
 
 const previous = {
   unit: process.env.PI_TELEGRAM_RESTART_UNIT,
@@ -13,6 +13,15 @@ afterEach(() => {
   else process.env.PI_TELEGRAM_RESTART_UNIT = previous.unit;
   if (previous.scope === undefined) delete process.env.PI_TELEGRAM_RESTART_SCOPE;
   else process.env.PI_TELEGRAM_RESTART_SCOPE = previous.scope;
+});
+
+describe("Venom Git update strategy classification", () => {
+  it("distinguishes clean, behind, ahead, and diverged histories", () => {
+    expect(classifyVenomUpdate(0, 0)).toBe("current");
+    expect(classifyVenomUpdate(0, 3)).toBe("behind");
+    expect(classifyVenomUpdate(2, 0)).toBe("ahead");
+    expect(classifyVenomUpdate(2, 3)).toBe("diverged");
+  });
 });
 
 describe("Venom maintenance safety", () => {
