@@ -1401,3 +1401,168 @@ describe("createTelegramController — callback keyboard cleanup ownership", () 
     expect(transport.removeInlineKeyboard).not.toHaveBeenCalled();
   });
 });
+
+describe("Telegram reaction command integration", () => {
+  function setupReactionTransport() {
+    const setReaction = vi.fn(async (_chat: number, _message: number, _emoji: string) => undefined);
+    const sendText = vi.fn(async () => [{ message_id: 1 }]);
+    const transport = {
+      removeInlineKeyboard: async () => undefined,
+      sendText,
+      sendButtons: async () => ({ message_id: 1 }),
+      editText: async () => undefined,
+      editButtons: async () => undefined,
+      answerCallbackQuery: async () => undefined,
+      deleteMessage: async () => undefined,
+      sendDocument: async () => undefined,
+      sendPhoto: async () => undefined,
+      sendChatAction: async () => undefined,
+      setReaction,
+    };
+    const controller = createTelegramController({
+      getSession: () => undefined,
+      transport,
+      ui: {
+        create: () => ({ notify: async () => undefined }) as any,
+        resolveInput: () => ({ handled: false }),
+        isSensitiveInput: () => false,
+        hasPendingInput: () => false,
+        dispose: async () => undefined,
+      },
+      authorizeUser: async () => true,
+      setActiveChatId: async () => undefined,
+      getBotUsername: () => "test-bot",
+      telegramCommands: new Map(),
+      getActiveTurn: () => undefined,
+      beginTelegramTurn: (chatId: number) => ({ chatId, queuedAttachments: [] }),
+      endTelegramTurn: () => undefined,
+    });
+    const send = (messageId: number, text: string, targetId?: number) =>
+      controller.handleMessage({
+        message_id: messageId, chat: { id: 100 }, text,
+        ...(targetId === undefined ? {} : { reply_to_message: { message_id: targetId, chat: { id: 100 } } }),
+      });
+    return { controller, send, setReaction, sendText };
+  }
+
+  it("applies and removes reactions only on replied-to messages", async () => {
+    const { controller, send, setReaction } = setupReactionTransport();
+    await send(1, "/react 👍", 51);
+    await send(2, "/unreact", 52);
+    expect(setReaction).toHaveBeenNthCalledWith(1, 100, 51, "👍");
+    expect(setReaction).toHaveBeenNthCalledWith(2, 100, 52, "");
+    controller.dispose();
+  });
+
+  it("rejects missing reply targets without calling the reaction API", async () => {
+    const { controller, send, setReaction, sendText } = setupReactionTransport();
+    await send(1, "/react 👍");
+    await send(2, "/unreact");
+    expect(setReaction).not.toHaveBeenCalled();
+    expect(sendText).toHaveBeenCalledWith(100, expect.stringContaining("Reply to a message"), undefined, 1);
+    controller.dispose();
+  });
+
+  it("reports Telegram reaction failures without crashing command handling", async () => {
+    const { controller, send, setReaction, sendText } = setupReactionTransport();
+    setReaction.mockRejectedValueOnce(new Error("reaction unavailable"));
+    await expect(send(1, "/react 👍", 51)).resolves.toBeUndefined();
+    expect(sendText).toHaveBeenCalledWith(100, expect.stringContaining("Reaction failed"), undefined, 1);
+    controller.dispose();
+  });
+});
+
+describe("Telegram queue control integration", () => {
+  function setup() {
+    const prompts: string[] = [];
+    const transport = {
+      removeInlineKeyboard: vi.fn(async () => undefined),
+      sendText: vi.fn(async () => [{ message_id: 999 }]),
+      sendButtons: vi.fn(async () => ({ message_id: 999 })),
+      editText: vi.fn(async () => undefined),
+      editButtons: vi.fn(async () => undefined),
+      answerCallbackQuery: vi.fn(async () => undefined),
+      deleteMessage: vi.fn(async () => undefined),
+      sendDocument: vi.fn(async () => undefined),
+      sendPhoto: vi.fn(async () => undefined),
+      sendChatAction: vi.fn(async () => undefined),
+    };
+    const session = {
+      prompt: vi.fn(async (value: string) => { prompts.push(value); }),
+      isStreaming: false,
+      extensionRunner: {
+        getUIContext: () => undefined,
+        setUIContext: () => undefined,
+        getCommand: () => undefined,
+        createCommandContext: () => ({ isIdle: () => true }),
+      },
+    } as any;
+    const controller = createTelegramController({
+      getSession: () => session,
+      transport,
+      ui: {
+        create: () => ({ notify: async () => undefined }) as any,
+        resolveInput: () => ({ handled: false }),
+        isSensitiveInput: () => false,
+        hasPendingInput: () => false,
+        dispose: async () => undefined,
+      },
+      authorizeUser: async () => true,
+      setActiveChatId: async () => undefined,
+      getBotUsername: () => "test-bot",
+      telegramCommands: new Map(),
+      getActiveTurn: () => undefined,
+      beginTelegramTurn: (chatId: number) => ({ chatId, queuedAttachments: [] }),
+      endTelegramTurn: () => undefined,
+    });
+    const send = (id: number, text: string, chatId = 100) =>
+      controller.handleMessage({ message_id: id, chat: { id: chatId }, text });
+    const settle = async () => {
+      for (let i = 0; i < 8; i++) await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    };
+    return { controller, send, settle, transport, prompts };
+  }
+
+  it("pauses dispatch, lists pending IDs, cancels one and resumes the rest", async () => {
+    const { controller, send, settle, transport, prompts } = setup();
+    await send(1, "/queue pause");
+    await send(2, "first");
+    await send(3, "second");
+    await send(4, "/queue list");
+    expect(transport.sendText).toHaveBeenCalledWith(100, expect.stringContaining("#2"), undefined, 4);
+    expect(transport.sendText).toHaveBeenCalledWith(100, expect.stringContaining("#3"), undefined, 4);
+    await send(5, "/queue cancel 2");
+    await send(6, "/queue resume");
+    await settle();
+    expect(prompts).toEqual(["second"]);
+    controller.dispose();
+  });
+
+  it("clear releases paused tasks without dispatching them", async () => {
+    const { controller, send, settle, prompts } = setup();
+    await send(1, "/queue pause");
+    await send(2, "discard");
+    await send(3, "/queue clear");
+    await settle();
+    expect(prompts).toEqual([]);
+    controller.dispose();
+  });
+
+  it("does not dispatch a paused prompt after disposal", async () => {
+    const { controller, send, settle, prompts } = setup();
+    await send(1, "/queue pause");
+    await send(2, "discard");
+    controller.dispose();
+    await settle();
+    expect(prompts).toEqual([]);
+  });
+
+  it("deduplicates replayed message IDs within the same chat", async () => {
+    const { controller, send, settle, prompts } = setup();
+    await send(10, "once");
+    await send(10, "once");
+    await settle();
+    expect(prompts).toEqual(["once"]);
+    controller.dispose();
+  });
+});
