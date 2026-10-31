@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { VENOM_PULSE_FRAMES, venomActivity, venomPulse, venomStatusLabel, formatHuntDuration, formatConsoleActivity, formatVenomConsole, venomThemeFrame, venomThemeLabel, venomThemeText, venomThemeNumber, formatVenomContextUsage, formatVenomFooter, venomPreset, VENOM_PRESETS, venomSectionTitle, venomTransmissionTitle, venomToolLine, venomToolTag, formatVenomTelemetry, formatVenomTerminalBlock, venomCompletionLabel } from "../venom-theme.ts";
+import { VENOM_PULSE_FRAMES, venomActivity, venomPulse, venomStatusLabel, formatHuntDuration, formatConsoleActivity, formatVenomConsole, venomThemeFrame, venomThemeLabel, venomThemeText, venomThemeNumber, formatVenomContextUsage, formatVenomFooter, venomPreset, VENOM_PRESETS, venomSectionTitle, venomTransmissionTitle, venomToolLine, venomToolTag, formatVenomTelemetry, formatVenomTerminalBlock, formatVenomActivityHistory, formatVenomOperationState, isVenomHud, venomCompletionLabel } from "../venom-theme.ts";
 
 describe("Venom Lethal Protector presentation", () => {
   it("cycles through symbiote pulse frames without reporting fictional completion", () => {
@@ -109,6 +109,34 @@ describe("Venom Lethal Protector presentation", () => {
     expect(formatVenomTerminalBlock(lines))
       .toBe("<pre>&gt; [READ] lib/a.ts\\n&gt; [VERIFY] npm test &amp;&amp; echo ok</pre>");
     expect(formatVenomTerminalBlock("<code>safe</code>")).toBe("<pre>safe</pre>");
+  });
+
+  it("supports distinct HUD, Predator and Classified themes", () => {
+    for (const preset of ["symbiote-hud", "predator-terminal", "classified"] as const) {
+      expect(isVenomHud(preset)).toBe(true);
+      expect(venomSectionTitle({ preset }).length).toBeGreaterThan(3);
+      expect(venomThemeLabel("tracking", { preset }).length).toBeGreaterThan(3);
+    }
+    expect(isVenomHud("blacksite")).toBe(false);
+  });
+
+  it("shows X recent lines and optional expandable history without losing errors", () => {
+    const esc = (value: string) => value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+    const lines = ["[READ] one.ts", "[READ] two.ts", "[ERROR] tool failed", "[VERIFY] npm test", "[EXEC] done"];
+    const recent = formatVenomActivityHistory(lines, esc, { visibleOperations: 2, collapseOperations: "off" });
+    expect(recent).toContain("npm test");
+    expect(recent).not.toContain("one.ts");
+    expect(recent).not.toContain("<blockquote");
+    const expanded = formatVenomActivityHistory(lines, esc, { visibleOperations: 2, collapseOperations: "expandable" });
+    expect(expanded).toContain("<blockquote expandable>");
+    expect(expanded).toContain("[ERROR] tool failed");
+    expect(expanded).toContain("<b>[VERIFY]</b>");
+    expect(expanded).not.toContain("<pre>");
+    expect(formatVenomActivityHistory(["[READ] <secret>"], esc)).toContain("&lt;secret&gt;");
+  });
+
+  it("reports only actual operation states", () => {
+    expect(formatVenomOperationState(4, 1, 2)).toBe("4 done · 1 running · 2 failed");
   });
 
   it("uses Lethal Protector state language", () => {
