@@ -1726,6 +1726,33 @@ export function createTelegramController(deps: {
         return;
       }
       if (message.reply_to_message || message.quote || message.text_quote || message.external_reply) logTelegramReplyContext(message);
+      if (trimmed === "/steer" || trimmed.startsWith("/steer ")) {
+        const instruction = trimmed.slice("/steer".length).trim();
+        if (!instruction) {
+          await deps.transport.sendText(chatId, "Usage: /steer <instruction> — inject into the active turn for this chat/topic.", messageThreadId, sourceMessageId);
+          return;
+        }
+        const activeTurn = deps.getActiveTurn(chatId, messageThreadId);
+        const steerSession = deps.getSession();
+        if (!activeTurn || !steerSession?.isStreaming) {
+          await deps.transport.sendText(chatId, "No active turn in this chat/topic to steer.", messageThreadId, sourceMessageId);
+          return;
+        }
+        try {
+          const context = steerSession.extensionRunner.createCommandContext();
+          if (typeof (context as any).isIdle === "function" && (context as any).isIdle()) {
+            await deps.transport.sendText(chatId, "Main agent is idle; use a normal message to start a new turn.", messageThreadId, sourceMessageId);
+            return;
+          }
+          await steerSession.prompt(instruction, { source: "interactive", streamingBehavior: "steer" as const });
+          ctrlLog.info("telegram explicit steer accepted", { chatId, messageThreadId, sourceMessageId });
+          await deps.transport.sendText(chatId, "Steering instruction submitted.", messageThreadId, sourceMessageId);
+        } catch (err) {
+          ctrlLog.error("telegram explicit steer failed", { chatId, messageThreadId, sourceMessageId, err });
+          await deps.transport.sendText(chatId, "Steering failed. Check the Telegram error log.", messageThreadId, sourceMessageId);
+        }
+        return;
+      }
       if (trimmed === "/queue" || trimmed === "/queue clear" || trimmed === "/queue all") {
         const key = targetKey(chatId, messageThreadId);
         const pending = pendingPromptCounts.get(key) ?? 0;
