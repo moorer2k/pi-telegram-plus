@@ -276,6 +276,7 @@ export function materializeTelegramConfig(
     if (binding.tool !== undefined) config.tool = binding.tool;
     if (binding.thinking !== undefined) config.thinking = binding.thinking;
     if (binding.groupAccess !== undefined) config.groupAccess = binding.groupAccess;
+    if (binding.trustedGroupMembers !== undefined) config.trustedGroupMembers = binding.trustedGroupMembers;
     if (binding.sessionIsolation !== undefined) config.sessionIsolation = binding.sessionIsolation;
     if (binding.groupJoinAlerts !== undefined) config.groupJoinAlerts = binding.groupJoinAlerts;
     if (binding.linkPreviews !== undefined) config.linkPreviews = binding.linkPreviews;
@@ -349,6 +350,7 @@ export async function persistProjectRuntimeState(
     if (config.tool !== undefined) binding.tool = config.tool;
     if (config.thinking !== undefined) binding.thinking = config.thinking;
     if (config.groupAccess !== undefined) binding.groupAccess = config.groupAccess;
+    if (config.trustedGroupMembers !== undefined) binding.trustedGroupMembers = config.trustedGroupMembers;
     if (config.sessionIsolation !== undefined) binding.sessionIsolation = config.sessionIsolation;
     if (config.groupJoinAlerts !== undefined) binding.groupJoinAlerts = config.groupJoinAlerts;
     if (config.linkPreviews !== undefined) binding.linkPreviews = config.linkPreviews;
@@ -400,6 +402,7 @@ export function preserveInMemoryRuntimeState(
     ...(persisted.tool === undefined && memory.tool !== undefined ? { tool: memory.tool } : {}),
     ...(persisted.thinking === undefined && memory.thinking !== undefined ? { thinking: memory.thinking } : {}),
     ...(persisted.groupAccess === undefined && memory.groupAccess !== undefined ? { groupAccess: memory.groupAccess } : {}),
+    ...(persisted.trustedGroupMembers === undefined && memory.trustedGroupMembers !== undefined ? { trustedGroupMembers: memory.trustedGroupMembers } : {}),
     ...(persisted.sessionIsolation === undefined && memory.sessionIsolation !== undefined ? { sessionIsolation: memory.sessionIsolation } : {}),
     ...(persisted.groupJoinAlerts === undefined && memory.groupJoinAlerts !== undefined ? { groupJoinAlerts: memory.groupJoinAlerts } : {}),
     ...(persisted.linkPreviews === undefined && memory.linkPreviews !== undefined ? { linkPreviews: memory.linkPreviews } : {}),

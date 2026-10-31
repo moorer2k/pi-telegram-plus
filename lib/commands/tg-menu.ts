@@ -11,6 +11,7 @@ import { currentHostName } from "../tui/host.ts";
 import type { TuiHost } from "../tui-bridge.ts";
 import { configVenomThemeFlow } from "./tg-venom-theme.ts";
 import { configVenomPhrasesFlow } from "./tg-venom-phrases.ts";
+import { configTrustedGroupMembersFlow } from "./tg-trusted-group.ts";
 import { getCurrentTelegramTurn } from "../turn-context.ts";
 import { checkpointCurrentUpdateCursor } from "../polling.ts";
 import { updateAndRestartVenom, getMaintenanceService, inspectVenomUpdate, type VenomUpdateStrategy } from "../maintenance.ts";
@@ -487,6 +488,7 @@ export function buildConfigMenuOptions(
     `🔄 Retry: ${config.retryCount ?? 3}`,
     `🐚 Shell confirm: ${config.bashConfirm ?? "dangerous"}`,
     `👥 Group access: ${config.groupAccess ?? "owner-mentions"}`,
+    `Trusted group participants: ${config.trustedGroupMembers?.length ?? 0}`,
     `🔒 Chat sessions: ${config.sessionIsolation ?? "shared"}`,
     `🔔 Group join alerts: ${config.groupJoinAlerts === false ? "off" : "on"}`,
     "Venom appearance",
@@ -523,6 +525,8 @@ async function configMenu(ui: MenuUi, configDeps: TgConfigDeps, sessionDeps?: Se
       await configBashFlow(ui, configDeps);
     } else if (choice.startsWith("👥 Group access:")) {
       await configGroupAccessFlow(ui, configDeps);
+    } else if (choice.startsWith("Trusted group participants:")) {
+      await configTrustedGroupMembersFlow(ui, configDeps);
     } else if (choice.startsWith("🔒 Chat sessions:")) {
       await configSessionIsolationFlow(ui, configDeps);
     } else if (choice.startsWith("🔔 Group join alerts:")) {

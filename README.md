@@ -334,3 +334,13 @@ Example optional settings:
 ```
 
 Absent phrase lists use the built-in five phrases, and resetting one list does not modify the other. No changes to the bot registry or credentials are needed.
+
+### Recognize trusted group participants by Telegram ID
+
+Group messages include the Telegram-supplied sender name, username (if present), and numerical user ID in the agent-facing prompt header. Authorization matches the numerical Telegram ID, not a display name or message text.
+
+Use `/tg → Config → Trusted group participants` to **list, add, or remove** participants. The menu collects a numeric ID and display name interactively, confirms the change, and persists it to the active project's `.pi/telegram.json`. No participant identities are bundled with the plugin or added by default.
+
+The optional `trustedGroupMembers` setting begins unset. Group allowlisting does not grant bot-owner, administrative, shell, or private-chat permissions. It permits group mentions when group access is set to `owner-mentions` or `public-mentions`; `disabled` still blocks group messages.
+
+Trusted prompts retain the restricted group-message path. **Security boundary:** a recognized identity is not a separate session. Shared Pi session context is not technically isolated from group prompts; do not treat allowlisting as data isolation.

@@ -8,6 +8,9 @@ export const RENDER_LEVELS: readonly TelegramRenderLevel[] = ["hidden", "brief",
 export type TelegramGroupAccess = "disabled" | "owner-mentions" | "public-mentions";
 export type TelegramSessionIsolation = "shared" | "per-chat";
 
+/** Explicitly recognized group senders. Grants group mention access only, never owner privileges. */
+export type TelegramTrustedGroupMember = { id: number; name: string };
+
 /** Editable shutdown and startup phrase pools; absence means use bundled defaults. */
 export type VenomRestartPhrases = {
   before?: string[];
@@ -87,6 +90,7 @@ export type ProjectTelegramBinding = {
   tool?: TelegramRenderLevel;
   thinking?: TelegramRenderLevel;
   groupAccess?: TelegramGroupAccess;
+  trustedGroupMembers?: TelegramTrustedGroupMember[];
   sessionIsolation?: TelegramSessionIsolation;
   groupJoinAlerts?: boolean;
   /** Enable expanded URL cards for new sends (off by default). */
@@ -135,6 +139,7 @@ export type TelegramConfig = {
   /** How to render thinking blocks in Telegram. */
   thinking?: TelegramRenderLevel;
   groupAccess?: TelegramGroupAccess;
+  trustedGroupMembers?: TelegramTrustedGroupMember[];
   sessionIsolation?: TelegramSessionIsolation;
   groupJoinAlerts?: boolean;
   linkPreviews?: boolean;
