@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { hasGfmTable, normalizeFlattenedTables, normalizeWrappedFlattenedTables, fallbackMalformedPipeTables, markdownToTelegramHtml } from "../markdown.ts";
-import { escapeRichMarkdown, richMarkdownForTables, TELEGRAM_RICH_TEXT_LIMIT } from "../rich-message.ts";
+import { escapeRichMarkdown, richMarkdownForTables, richMarkdownForDraft, richMarkdownForResponse, TELEGRAM_RICH_TEXT_LIMIT } from "../rich-message.ts";
 
 const TABLE = [
   "| Project | Status | Count |",
@@ -168,5 +168,89 @@ describe("richMarkdownForTables", () => {
     const huge = `${TABLE}\n\n${"x".repeat(TELEGRAM_RICH_TEXT_LIMIT)}`;
     expect(richMarkdownForTables(huge)).toBeUndefined();
     expect(richMarkdownForTables(huge.slice(0, TELEGRAM_RICH_TEXT_LIMIT - 100))).toBeDefined();
+  });
+});
+
+describe("native rich markdown for complete responses", () => {
+  it("keeps bullet lists and prose intact", () => {
+    const source = "Extensions:\n\n- Pigram\n- Qusic\n\nDone.";
+    const rich = richMarkdownForResponse(source);
+    expect(rich).toContain("- Pigram");
+    expect(rich).toContain("- Qusic");
+    expect(rich).toContain("Done.");
+  });
+  it("preserves inline and display LaTeX syntax", () => {
+    const source = String.raw`Inline \\(x^2 + y^2\\) and display \\[\\frac{a}{b}\\].`;
+    const rich = richMarkdownForResponse(source);
+    expect(rich).toContain(String.raw`\\frac{a}{b}`);
+    expect(rich).toContain(String.raw`\\(x^2 + y^2\\)`);
+  });
+  it("fails back to HTML for incomplete fences and oversized replies", () => {
+    expect(richMarkdownForResponse("```ts\nconst x = 1")).toBeUndefined();
+    expect(richMarkdownForResponse("x".repeat(TELEGRAM_RICH_TEXT_LIMIT + 1))).toBeUndefined();
+  });
+});
+
+describe("rich delivery content preservation", () => {
+  it("keeps nested lists, links and code fences in native payload", () => {
+    const source = ["## Tools", "- **First**", "  - nested", "- [Docs](https://example.org)", "", "```ts", "const value = 2;", "```"].join("\n");
+    const rich = richMarkdownForResponse(source);
+    expect(rich).toContain("nested");
+    expect(rich).toContain("https://example.org");
+    expect(rich).toContain("const value = 2;");
+  });
+  it("preserves literal comparison operators without exposing HTML tags", () => {
+    const rich = richMarkdownForResponse("When a < b && b > c, show results.");
+    expect(rich).toContain("&lt;");
+    expect(rich).toContain("&amp;&amp;");
+  });
+});
+
+describe("streaming draft Markdown recovery", () => {
+  it("does not publish incomplete trailing lines", () => {
+    expect(richMarkdownForDraft("Complete paragraph.\n[unfinished](")).toBe("Complete paragraph.");
+  });
+  it("does not publish unterminated code fences", () => {
+    expect(richMarkdownForDraft("Intro\n\n```ts\nconst x = 1;")).toBe("Intro");
+  });
+  it("preserves completed fenced code", () => {
+    expect(richMarkdownForDraft("Intro\n\n```ts\nconst x = 1;\n```\n")).toContain("const x = 1;");
+  });
+  it("preserves LaTeX source in complete responses", () => {
+    expect(richMarkdownForResponse(String.raw`\\(x^2 + y^2\\) and $$\\frac{1}{2}$$`)).toContain(String.raw`\\frac{1}{2}`);
+  });
+});
+
+describe("fence parser regression", () => {
+  it("rejects mismatched fence types", () => {
+    expect(richMarkdownForResponse("~~~js\nconst a=1;\n```")).toBeUndefined();
+  });
+  it("rejects a shorter closing fence", () => {
+    expect(richMarkdownForResponse("````js\nconst a=1;\n```")).toBeUndefined();
+  });
+  it("ignores fence-looking text inside an open fenced block", () => {
+    expect(richMarkdownForResponse("```text\n~~~\n```")).toContain("~~~");
+  });
+  it("retains complete prose before an unfinished block", () => {
+    expect(richMarkdownForDraft("Ready.\n\n~~~js\nconst a=1;")).toBe("Ready.");
+  });
+  it("accepts a longer valid closing fence", () => {
+    expect(richMarkdownForResponse("```js\nconst a=1;\n````")).toContain("const a=1;");
+  });
+});
+
+describe("incomplete inline Markdown recovery", () => {
+  it("keeps completed text before a partial link", () => {
+    expect(richMarkdownForDraft("Ready.\n[link](https://")).toBe("Ready.");
+  });
+  it("keeps completed text before unfinished inline code", () => {
+    expect(richMarkdownForDraft("Ready.\n`unfinished")).toBe("Ready.");
+  });
+  it("keeps completed text before unfinished inline math", () => {
+    expect(richMarkdownForDraft("Ready.\n$\\\\frac{1}{")).toBe("Ready.");
+  });
+  it("does not alter a complete mathematical final answer", () => {
+    const input = String.raw`\\(x^2 + y^2\\)`;
+    expect(richMarkdownForResponse(input)).toContain(input);
   });
 });

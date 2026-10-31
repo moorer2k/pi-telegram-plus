@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { escapeHtml } from "./html.ts";
 import { markdownToTelegramHtml } from "./markdown.ts";
-import { richMarkdownForTables } from "./rich-message.ts";
+import { richMarkdownForDraft, richMarkdownForResponse } from "./rich-message.ts";
 import type { TelegramConfig, TelegramRenderLevel, TelegramTransport, TelegramTurn } from "./types.ts";
 import type { SecretStore } from "./tui/secrets.ts";
 import { RENDER_LEVELS } from "./types.ts";
@@ -273,6 +273,13 @@ export function registerTelegramRenderer(
     activity: "awakening" as VenomActivity, started: 0,
     running: new Set<string>(), completed: 0, failed: 0,
   };
+  let draftSequence = 0;
+  let draftId = 0;
+  let draftLastText = "";
+  let draftBusy = false;
+  let draftEnabled = true;
+  let draftPartial = "";
+  let draftLastAt = 0;
   let progressTimer: ReturnType<typeof setInterval> | undefined;
   const stopProgressTimer = () => {
     if (progressTimer !== undefined) clearInterval(progressTimer);
@@ -465,9 +472,10 @@ export function registerTelegramRenderer(
       await deps.transport.sendText(turn.chatId, html, turn.messageThreadId, turn.sourceMessageId, richMarkdown);
       return;
     }
-    // The placeholder cannot hold an HTML answer that large, but one Rich
-    // Message can (up to ~30k), so a table answer still lands in place.
-    if (options.final && !richMarkdown && Buffer.byteLength(html, "utf8") > EDIT_LIMIT) {
+    // Never edit an oversized final answer in place: when native Rich editing
+    // fails, the HTML edit path only takes the first chunk and loses the rest.
+    // Sending a new message lets native Rich work, with full HTML chunk fallback.
+    if (options.final && Buffer.byteLength(html, "utf8") > EDIT_LIMIT) {
       await deps.transport.editText(turn.chatId, turn.replaceMessageId, "🤖 <b>Assistant</b>\n\nFinal answer follows in separate message(s).").catch(renderLog.swallow("warn", "editText final-answer pointer failed", { chatId: turn.chatId, messageId: turn.replaceMessageId }));
       turn.replaceMessageId = undefined;
       await deps.transport.sendText(turn.chatId, html, turn.messageThreadId, turn.sourceMessageId, richMarkdown);
@@ -477,7 +485,7 @@ export function registerTelegramRenderer(
       await deps.transport.editText(turn.chatId, turn.replaceMessageId, html, richMarkdown);
     } catch (err) {
       // Edit failed (message deleted / too many edits). Fall back to a new message.
-      renderLog.debug("editText failed; falling back to sendText", { chatId: turn.chatId, messageId: turn.replaceMessageId, err });
+      renderLog.warn("editText failed; sending complete answer as new message", { chatId: turn.chatId, messageId: turn.replaceMessageId, err });
       turn.replaceMessageId = undefined;
       await deps.transport.sendText(turn.chatId, html, turn.messageThreadId, turn.sourceMessageId, richMarkdown);
     }
@@ -520,6 +528,12 @@ export function registerTelegramRenderer(
       progress.failed = 0;
       progress.started = Date.now();
       progress.editing = false;
+      draftId = ++draftSequence;
+      draftLastText = "";
+      draftBusy = false;
+      draftEnabled = true;
+      draftPartial = "";
+      draftLastAt = 0;
       // Telegram has no continually animated text format. Edit the existing
       // message on a bounded timer, including while a tool is blocking.
       if (progress.target) {
@@ -643,6 +657,41 @@ ${partial}`);
     } catch (err) { renderLog.warn("tool-result image upload failed", { err }); }
   });
 
+  // Pi emits text deltas before message_end. Preview only complete Markdown
+  // constructs, and leave the final authoritative send to message_end.
+  pi.on("message_update", async (event) => {
+    try {
+      if (!progressMode() || !progress.target || progressTarget() !== progress.target) return;
+      if (!draftEnabled || !deps.transport.sendRichDraft) return;
+      const update = event as unknown as {
+        message?: AnyMessage;
+        assistantMessageEvent?: { type?: string; delta?: string };
+      };
+      if (update.message?.role !== "assistant" || update.assistantMessageEvent?.type !== "text_delta") return;
+      const delta = update.assistantMessageEvent.delta;
+      if (!delta) return;
+      draftPartial += delta;
+      if (draftBusy) return;
+      const now = Date.now();
+      if (now - draftLastAt < 1200) return;
+      const turn = deps.getActiveTurn();
+      if (!turn) return;
+      const candidate = [ ...progress.messages, draftPartial ].join("\n\n");
+      const rich = richMarkdownForDraft(candidate);
+      if (!rich || rich === draftLastText) return;
+      draftBusy = true;
+      draftLastAt = now;
+      try {
+        if (await deps.transport.sendRichDraft(turn.chatId, draftId, rich, turn.messageThreadId)) {
+          draftLastText = rich;
+        } else draftEnabled = false;
+      } catch (err) {
+        draftEnabled = false;
+        renderLog.debug("Rich draft streaming disabled after failure", { err });
+      } finally { draftBusy = false; }
+    } catch (err) { renderLog.debug("Rich draft streaming error", { err }); }
+  });
+
   pi.on("message_end", async (event) => {
     try {
     const message = event.message as AnyMessage;
@@ -673,6 +722,28 @@ ${partial}`);
       const messageText = body.trim();
       progress.messages = appendProgressMessage(progress.messages, messageText);
       progress.latest = messageText;
+      draftPartial = "";
+      // Drafts are best-effort, never overlapping, and scoped to this agent run.
+      const turnForDraft = deps.getActiveTurn();
+      if (turnForDraft && draftEnabled && !draftBusy && deps.transport.sendRichDraft) {
+        const draftText = progress.messages.join("\n\n");
+        const nativeDraft = richMarkdownForResponse(draftText);
+        if (nativeDraft && nativeDraft !== draftLastText) {
+          draftBusy = true;
+          try {
+            const accepted = await deps.transport.sendRichDraft(
+              turnForDraft.chatId, draftId, nativeDraft, turnForDraft.messageThreadId,
+            );
+            if (accepted) draftLastText = nativeDraft;
+            else draftEnabled = false;
+          } catch (err) {
+            draftEnabled = false;
+            renderLog.debug("native Rich draft unavailable; preserving Venom HUD", { err });
+          } finally {
+            draftBusy = false;
+          }
+        }
+      }
       await updateProgress(true);
     } else if (hasBody) {
       // A Markdown table cannot be expressed in Telegram's HTML mode, so the
@@ -680,7 +751,7 @@ ${partial}`);
       // the answer contains a real GFM table, prefer a Rich Message: Telegram
       // renders it as a native bordered table. Non-qualifying answers — and any
       // server without Rich Message support — keep the HTML path untouched.
-      const richMarkdown = richMarkdownForTables(body);
+      const richMarkdown = richMarkdownForResponse(body);
       renderLog.info("final Telegram formatting", {
         rawPipes: (body.match(/\|/g) ?? []).length,
         separatorPresent: /\|\s*:?-{2,}:?\s*\|/.test(body),
@@ -731,12 +802,17 @@ ${partial}`);
       for (let attempt = 0; attempt < 80 && progress.editing; attempt++) {
         await new Promise<void>(resolve => setTimeout(resolve, 25));
       }
+      // Do not finalize while a native draft request is still in flight.
+      for (let attempt = 0; attempt < 80 && draftBusy; attempt++) {
+        await new Promise<void>(resolve => setTimeout(resolve, 25));
+      }
+      draftEnabled = false;
       // Preserve intermediate responses, including useful tool findings,
       // instead of replacing them with only the last assistant text.
       const final = progress.messages.join("\n\n");
       progress.target = "";
       if (final) {
-        const richMarkdown = richMarkdownForTables(final);
+        const richMarkdown = richMarkdownForResponse(final);
         renderLog.info("final Telegram formatting", {
           rawPipes: (final.match(/\|/g) ?? []).length,
           separatorPresent: /\|\s*:?-{2,}:?\s*\|/.test(final),

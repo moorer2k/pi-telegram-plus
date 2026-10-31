@@ -55,6 +55,74 @@ describe("missing Rich edit target recovery", () => {
   });
 });
 
+describe("rich edit fallback failures", () => {
+  let priorFetch: FetchImpl;
+  beforeEach(() => { priorFetch = globalThis.fetch; __resetRichMessagesForTests(); });
+  afterEach(() => { globalThis.fetch = priorFetch; __resetRichMessagesForTests(); });
+
+  it("propagates failure after rich, HTML and plain edit all fail", async () => {
+    const calls: Array<Record<string, unknown>> = [];
+    globalThis.fetch = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      calls.push(JSON.parse(String(init?.body)));
+      return telegramResponse(false, false, "Bad Request: can't parse entities");
+    }) as unknown as FetchImpl;
+    const { transport } = makeTransport();
+    await expect(transport.editText(123, 456, "<b>answer</b>", "answer")).rejects.toThrow(/parse entities/i);
+    expect(calls).toHaveLength(3);
+    expect(calls[0]).toHaveProperty("rich_message");
+    expect(calls[1]).toHaveProperty("parse_mode", "HTML");
+    expect(calls[2]).not.toHaveProperty("parse_mode");
+  });
+});
+
+describe("unsupported rich edit capability", () => {
+  let priorFetch: FetchImpl;
+  beforeEach(() => { priorFetch = globalThis.fetch; __resetRichMessagesForTests(); });
+  afterEach(() => { globalThis.fetch = priorFetch; __resetRichMessagesForTests(); });
+
+  it("falls back to HTML and skips later unsupported Rich calls", async () => {
+    const methods: string[] = [];
+    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
+      const method = String(input).split("/").pop()!;
+      methods.push(method);
+      if (methods.length === 1) return telegramResponse(false, false, "Bad Request: unknown method");
+      return telegramResponse(true, { message_id: 123 });
+    }) as unknown as FetchImpl;
+    const { transport } = makeTransport();
+    await transport.editText(123, 456, "<b>first</b>", "**first**");
+    await transport.sendText(123, "<b>second</b>", undefined, undefined, "**second**");
+    expect(methods).toEqual(["editMessageText", "editMessageText", "sendMessage"]);
+  });
+});
+
+describe("native Rich draft transport", () => {
+  let priorFetch: FetchImpl;
+  beforeEach(() => { priorFetch = globalThis.fetch; __resetRichMessagesForTests(); });
+  afterEach(() => { globalThis.fetch = priorFetch; __resetRichMessagesForTests(); });
+
+  it("sends a Rich draft with topic routing and a stable draft identifier", async () => {
+    const calls: Array<{ method: string; body: Record<string, unknown> }> = [];
+    globalThis.fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      calls.push({ method: String(input).split("/").pop()!, body: JSON.parse(String(init?.body)) });
+      return telegramResponse(true, true);
+    }) as unknown as FetchImpl;
+    const { transport } = makeTransport();
+    expect(await transport.sendRichDraft!(123, 77, "**Working**", 456)).toBe(true);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
+      method: "sendRichMessageDraft",
+      body: { chat_id: 123, draft_id: 77, message_thread_id: 456,
+        rich_message: { markdown: "**Working**", skip_entity_detection: true } },
+    });
+  });
+
+  it("returns false when the draft API rejects content", async () => {
+    globalThis.fetch = vi.fn(async () => telegramResponse(false, false, "Bad Request: can't parse entities")) as unknown as FetchImpl;
+    const { transport } = makeTransport();
+    expect(await transport.sendRichDraft!(123, 77, "**unfinished")).toBe(false);
+  });
+});
+
 describe("local Bot API attachment downloads", () => {
   let priorFetch: FetchImpl;
   beforeEach(() => { priorFetch = globalThis.fetch; });
