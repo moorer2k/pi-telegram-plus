@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hasGfmTable } from "../markdown.ts";
+import { hasGfmTable, normalizeFlattenedTables, markdownToTelegramHtml } from "../markdown.ts";
 import { escapeRichMarkdown, richMarkdownForTables, TELEGRAM_RICH_TEXT_LIMIT } from "../rich-message.ts";
 
 const TABLE = [
@@ -26,6 +26,40 @@ describe("hasGfmTable", () => {
   });
 });
 
+const FLATTENED_FORECAST = "Next 3 days: | Date | High / Low | Rain chance | |-----|----------|------------| | Thu 10/30 | 52 / 39°F | 14% | | Fri 10/31 | 55 / 37°F | 12% | | Sat 11/01 | 54 / 39°F | 4% |";
+
+describe("flattened table recovery", () => {
+  it("restores an inline forecast into real GFM table rows", () => {
+    const normal = normalizeFlattenedTables(FLATTENED_FORECAST);
+    expect(normal).toContain("Next 3 days:\n\n| Date | High / Low | Rain chance |");
+    expect(normal).toContain("| ----- | ---------- | ------------ |");
+    expect(normal).toContain("| Thu 10/30 | 52 / 39°F | 14% |");
+    expect(normal).toContain("| Sat 11/01 | 54 / 39°F | 4% |");
+    expect(hasGfmTable(normal)).toBe(true);
+  });
+  it("selects native Rich table delivery after recovery", () => {
+    const rich = richMarkdownForTables(FLATTENED_FORECAST);
+    expect(rich).toBeDefined();
+    expect(rich).toContain("| Fri 10/31 | 55 / 37°F | 12% |");
+  });
+  it("repairs HTML fallback rather than displaying raw pipes", () => {
+    const html = markdownToTelegramHtml(FLATTENED_FORECAST);
+    expect(html).not.toContain("|-----|");
+    expect(html).toContain("Thu 10/30");
+    expect(html).toContain("Fri 10/31");
+  });
+  it("leaves ordinary pipe prose and code fences unchanged", () => {
+    expect(normalizeFlattenedTables("alpha | beta | gamma")).toBe("alpha | beta | gamma");
+    const fenced = "```md\n" + FLATTENED_FORECAST + "\n```";
+    expect(normalizeFlattenedTables(fenced)).toBe(fenced);
+    expect(richMarkdownForTables(fenced)).toBeUndefined();
+  });
+  it("avoids inventing tables when no data row follows", () => {
+    const incomplete = "Summary | Name | Count | | --- | --- |";
+    expect(normalizeFlattenedTables(incomplete)).toBe(incomplete);
+    expect(richMarkdownForTables(incomplete)).toBeUndefined();
+  });
+});
 describe("escapeRichMarkdown", () => {
   it("escapes ampersands and angle brackets that could become markup", () => {
     expect(escapeRichMarkdown('<tg-spoiler>a & b')).toBe("&lt;tg-spoiler>a &amp; b");
