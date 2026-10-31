@@ -314,7 +314,8 @@ export function formatVenomActivityHistory(
     const raw = match?.[2] ?? line;
     // A one-line activity row keeps Telegram's bubble from growing unpredictably.
     const clean = raw.replace(/\s+/g, " ").trim();
-    const detail = options?.operationDetail === "full" ? clean.slice(0, 100) : clean.slice(0, 66);
+    const detailLimit = fixedRows ? 36 : options?.operationDetail === "full" ? 100 : 66;
+    const detail = clean.slice(0, detailLimit);
     return tag && /^(RECON|READ|PATCH|VERIFY|EXEC|TRACE|ERROR)$/.test(tag)
       ? "<b>[" + tag + "]</b> <code>" + escape(prefix + " " + detail) + "</code>"
       : "<code>" + escape(prefix + " " + detail) + "</code>";
