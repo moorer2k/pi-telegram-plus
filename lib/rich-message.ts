@@ -73,13 +73,32 @@ export function richMarkdownForTables(markdown: string): string | undefined {
  * fenced code or attempt a rich edit with unbalanced fences.
  * Unsupported API servers use the existing HTML fallback.
  */
+/** Truncate streaming text before unfinished inline constructs.
+ * Full answers are never truncated: the normal HTML fallback remains available.
+ */
+function safeInlinePrefix(text: string): string {
+  const lines = text.split("\n");
+  const last = lines[lines.length - 1] ?? "";
+  // Streaming lines without a terminating newline may contain an incomplete
+  // link target, image, inline code span, or math delimiter.
+  const unfinishedLink = /!?\[[^\]\n]*\]\([^)]*$/.test(last);
+  const unfinishedBracket = /!?\[[^\]\n]*$/.test(last);
+  const ticks = (last.match(/(?<!`)`(?!`)/g) ?? []).length;
+  const unfinishedMath = (last.match(/(?<!\\)\$/g) ?? []).length % 2 !== 0;
+  if (unfinishedLink || unfinishedBracket || ticks % 2 !== 0 || unfinishedMath) {
+    lines.pop();
+    return lines.join("\n");
+  }
+  return text;
+}
+
 /** Streaming drafts expose only completed lines with balanced code fences. */
 export function richMarkdownForDraft(markdown: string): string | undefined {
   const lines = markdown.split("\n");
   // Avoid publishing an unfinished final line (links, inline code, tables,
   // math delimiters and fence openers can all be mid-token).
   if (lines.length > 1 && lines[lines.length - 1] !== "") lines.pop();
-  let safe = lines.join("\n");
+  let safe = safeInlinePrefix(lines.join("\n"));
   // Remove the actual unmatched opener, not merely the last fence-like
   // line: a closing delimiter with trailing text is not a valid closer.
   let opener: number | undefined;
