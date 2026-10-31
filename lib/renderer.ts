@@ -313,7 +313,7 @@ export function registerTelegramRenderer(
       ? formatVenomFooter(progress.count, Date.now() - progress.started, context, model, footerOptions)
       : formatVenomTelemetry(progress.count, Date.now() - progress.started, context, model, footerOptions);
     const objective = progress.latest
-      ? progress.latest.replace(/\s+/g, " ").trim().slice(0, 105)
+      ? progress.latest.replace(/\s+/g, " ").trim().slice(0, 48)
       : "Working on the current request";
     const role = style === "classified" ? "[ CLASSIFIED // SYMBIOTE NETWORK ]\n" :
       style === "predator-terminal" ? "[ PREDATOR TERMINAL ]\n" :
