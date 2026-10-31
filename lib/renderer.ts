@@ -9,7 +9,7 @@ import type { TelegramConfig, TelegramRenderLevel, TelegramTransport, TelegramTu
 import type { SecretStore } from "./tui/secrets.ts";
 import { RENDER_LEVELS } from "./types.ts";
 import { log } from "./logger.ts";
-import { venomActivity, venomThemeFrame, venomThemeLabel, venomThemeNumber, venomThemeText, formatVenomContextUsage, formatVenomFooter, formatVenomConsole, formatVenomTerminalBlock, formatVenomCompactOperations, VENOM_DEFAULTS, venomSectionTitle, venomTransmissionTitle, venomToolLine, venomCompletionLabel, formatVenomTelemetry, type VenomActivity } from "./venom-theme.ts";
+import { venomActivity, venomThemeFrame, venomThemeLabel, venomThemeNumber, venomThemeText, formatVenomContextUsage, formatVenomFooter, formatVenomConsole, formatVenomCompactOperations, VENOM_DEFAULTS, venomSectionTitle, venomTransmissionTitle, venomToolLine, venomCompletionLabel, formatVenomTelemetry, type VenomActivity } from "./venom-theme.ts";
 
 const renderLog = log.child("renderer");
 
@@ -295,7 +295,8 @@ export function registerTelegramRenderer(
     const entries = formatVenomConsole(progress.lines, escapeHtml, theme);
     const previewLength = venomThemeNumber(theme?.previewLength, 500, 100, 1500);
     const preview = progress.latest ? "\n\n<b>" + escapeHtml(venomTransmissionTitle(theme)) + "</b>\n" + escapeHtml(progress.latest.slice(0, previewLength)) : "";
-    const frame = venomThemeFrame(progress.frame++, theme);
+    const pulseStep = Math.floor(Math.max(0, Date.now() - progress.started) / editGap);
+    const frame = venomThemeFrame(pulseStep, theme);
     // Live metrics may be absent on some Pi/OMP host versions.
     const session = deps.getSession?.();
     let contextUsage: unknown;
@@ -314,7 +315,8 @@ export function registerTelegramRenderer(
       : entries;
     const transmission = progress.latest
       ? isBlacksite
-        ? "\n<b>" + escapeHtml(venomTransmissionTitle(theme)) + "</b>\n<blockquote>" +
+        ? "\n\n<b>" + escapeHtml(venomTransmissionTitle(theme)) + "</b>\n" +
+          (progress.latest.length > 360 ? "<blockquote expandable>" : "<blockquote>") +
           escapeHtml(progress.latest.slice(0, previewLength)) + "</blockquote>"
         : preview
       : "";
