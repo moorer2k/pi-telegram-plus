@@ -415,7 +415,10 @@ export function createTelegramTransport(
           }, undefined, lease);
           return;
         } catch (err) {
-          // Network failure: nothing useful to retry (same as the HTML path).
+          // Identical Rich frames are expected when a timer fires before the
+          // underlying status changes. Telegram reports 'not modified' but
+          // the current Rich card is valid: never overwrite it with HTML.
+          if (err instanceof TelegramApiRequestError && /message is not modified/i.test(err.message)) return;
           if (isNetworkError(err)) return;
           noteRichFailure("editMessageText", err);
         }
