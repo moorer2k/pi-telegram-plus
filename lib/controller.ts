@@ -1726,6 +1726,32 @@ export function createTelegramController(deps: {
         return;
       }
       if (message.reply_to_message || message.quote || message.text_quote || message.external_reply) logTelegramReplyContext(message);
+      // Pi supports followUp natively: unlike steer, this waits for the current
+      // turn to finish before applying the instruction. Only the owning topic
+      // may inject into its active turn; otherwise use the ordinary queue.
+      if (trimmed === "/followup" || trimmed.startsWith("/followup ")) {
+        const instruction = trimmed.slice("/followup".length).trim();
+        if (!instruction) {
+          await deps.transport.sendText(chatId, "Usage: /followup <instruction> — run after the current turn.", messageThreadId, sourceMessageId);
+          return;
+        }
+        const activeTurn = deps.getActiveTurn(chatId, messageThreadId);
+        const followupSession = deps.getSession();
+        if (activeTurn && followupSession?.isStreaming) {
+          try {
+            await followupSession.prompt(instruction, { source: "interactive", streamingBehavior: "followUp" as const });
+            ctrlLog.info("telegram followup accepted", { chatId, messageThreadId, sourceMessageId });
+            await deps.transport.sendText(chatId, "Follow-up instruction queued for the active turn.", messageThreadId, sourceMessageId);
+          } catch (err) {
+            ctrlLog.error("telegram followup failed", { chatId, messageThreadId, sourceMessageId, err });
+            await deps.transport.sendText(chatId, "Follow-up failed. Check the Telegram error log.", messageThreadId, sourceMessageId);
+          }
+        } else {
+          await submitText(instruction, chatId, undefined, messageThreadId, sourceMessageId);
+          await deps.transport.sendText(chatId, "Instruction submitted to the normal prompt queue.", messageThreadId, sourceMessageId);
+        }
+        return;
+      }
       if (trimmed === "/steer" || trimmed.startsWith("/steer ")) {
         const instruction = trimmed.slice("/steer".length).trim();
         if (!instruction) {
