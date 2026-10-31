@@ -132,3 +132,35 @@ describe("logger — file sink", () => {
     expect(isLoggingEnabled()).toBe(true);
   });
 });
+
+describe("dedicated error diagnostics", () => {
+  it("writes errors to a separate JSONL file and excludes informational records", async () => {
+    log.info("ordinary activity");
+    log.error("delivery failed", { chatId: 123, err: new Error("timeout") });
+    await drain();
+    const files = await __drainAndListFiles(dir);
+    const errors = files.find((file) => /^pi-telegram-plus-errors-\\d{4}-\\d{2}-\\d{2}\\.log$/.test(basename(file)));
+    expect(errors).toBeDefined();
+    const records = parseLines(await readFile(errors!, "utf8"));
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({ level: "error", msg: "delivery failed", chatId: 123 });
+  });
+
+  it("redacts sensitive fields and nested credentials in both log streams", async () => {
+    const token = "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi";
+    log.error("credential failure", {
+      prompt: "private instruction",
+      details: { authorization: "Bearer secret-value", nested: { token } },
+      err: new Error("request used Bearer secret-value"),
+    });
+    await drain();
+    const files = await __drainAndListFiles(dir);
+    for (const file of files) {
+      const contents = await readFile(file, "utf8");
+      expect(contents).not.toContain("private instruction");
+      expect(contents).not.toContain(token);
+      expect(contents).not.toContain("secret-value");
+      expect(contents).toContain("[redacted]");
+    }
+  });
+});
