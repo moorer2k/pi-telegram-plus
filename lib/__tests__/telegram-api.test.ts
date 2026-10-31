@@ -517,6 +517,18 @@ describe("Telegram message reactions", () => {
     });
   });
 
+  it("removes the bot reaction with an empty reaction list", async () => {
+    const calls: Array<{ url: string; body: Record<string, unknown> }> = [];
+    globalThis.fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      calls.push({ url: String(input), body: JSON.parse(String(init?.body)) });
+      return telegramResponse(true, true);
+    }) as unknown as FetchImpl;
+    const { transport } = makeTransport();
+    await transport.setReaction!(123, 456, "");
+    expect(calls).toHaveLength(1);
+    expect(calls[0].body).toMatchObject({ chat_id: 123, message_id: 456, reaction: [] });
+  });
+
   it("rejects invalid reaction targets without network access", async () => {
     const fetchSpy = vi.fn();
     globalThis.fetch = fetchSpy as unknown as FetchImpl;
