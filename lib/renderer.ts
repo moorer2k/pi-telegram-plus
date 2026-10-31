@@ -507,6 +507,7 @@ export function registerTelegramRenderer(
   let draftDisabled = false;
   let draftBusy = false;
   let draftTarget = "";
+  let draftGeneration = 0;
   let draftId = 1;
   (pi as any).on("message_update", async (event: any) => {
     const turn = deps.getActiveTurn();
@@ -525,19 +526,25 @@ export function registerTelegramRenderer(
     const safe = prepareDraftPreview(preview);
     draftBusy = true;
     draftLastSent = Date.now();
+    const generation = draftGeneration;
+    const sendingId = draftId;
     try {
-      await deps.transport.sendDraft(turn.chatId, draftId, safe);
+      // A prior preview can outlive its agent turn. Capture the draft ID and
+      // generation so a late failure cannot disable a subsequent turn.
+      await deps.transport.sendDraft(turn.chatId, sendingId, safe);
     } catch (err) {
-      draftDisabled = true;
+      if (generation === draftGeneration) draftDisabled = true;
       renderLog.warn("native draft unavailable; retaining normal message delivery", { chatId: turn.chatId, err });
     } finally {
-      draftBusy = false;
+      if (generation === draftGeneration) draftBusy = false;
     }
   });
 
   pi.on("agent_start", async () => {
     try {
     const draftTurn = deps.getActiveTurn();
+    draftGeneration += 1;
+    draftBusy = false;
     draftTarget = draftTurn ? String(draftTurn.chatId) + ":" + String(draftTurn.sourceMessageId ?? "") : "";
     draftId = (++draftSequence % 2147483646) + 1;
     draftDisabled = false;
@@ -762,7 +769,9 @@ ${partial}`);
   });
 
   pi.on("agent_end", async () => {
+    draftGeneration += 1;
     draftTarget = "";
+    draftBusy = false;
     try {
       if (!progressMode() || !progress.target || progressTarget() !== progress.target) return;
       const turn = deps.getActiveTurn();
