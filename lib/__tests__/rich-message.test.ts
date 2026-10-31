@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hasGfmTable, normalizeFlattenedTables, normalizeWrappedFlattenedTables, markdownToTelegramHtml } from "../markdown.ts";
+import { hasGfmTable, normalizeFlattenedTables, normalizeWrappedFlattenedTables, fallbackMalformedPipeTables, markdownToTelegramHtml } from "../markdown.ts";
 import { escapeRichMarkdown, richMarkdownForTables, TELEGRAM_RICH_TEXT_LIMIT } from "../rich-message.ts";
 
 const TABLE = [
@@ -87,6 +87,36 @@ describe("wrapped flattened GFM tables", () => {
     expect(normalizeWrappedFlattenedTables(prose)).toBe(prose);
     const fenced = "```md\n" + source + "\n```";
     expect(normalizeWrappedFlattenedTables(fenced)).toBe(fenced);
+  });
+});
+describe("final answer malformed table fallback", () => {
+  const screenshot = "3-day outlook | Day | High / Low | Rain chance | Conditions | | --- | --- | --- | --- | | Today (Thu) | 48° / 45° | 42% | Light drizzle | | Fri | 51° / 48° | 27% | Light drizzle | | Sat | 51° / 41° | 0% | Mostly cloudy |";
+  it("recovers the exact four-column screenshot table into native Rich formatting", () => {
+    const rich = richMarkdownForTables(screenshot);
+    expect(rich).toBeDefined();
+    expect(rich).toContain("| Today (Thu) | 48° / 45° | 42% | Light drizzle |");
+    expect(rich).toContain("| Sat | 51° / 41° | 0% | Mostly cloudy |");
+  });
+  it("keeps a native table in HTML fallback for the exact screenshot", () => {
+    const html = markdownToTelegramHtml(screenshot);
+    expect(html).not.toContain("| --- |");
+    expect(html).toContain("Today (Thu)");
+    expect(html).toContain("Light drizzle");
+    expect(html).toContain("Mostly cloudy");
+  });
+  it("never leaves raw separator pipes when a data cell is missing", () => {
+    const broken = "Outlook | Day | High | Rain | | --- | --- | --- | | Fri | 50° | 20% | | Sat | 52° |";
+    expect(richMarkdownForTables(broken)).toBeUndefined();
+    const html = markdownToTelegramHtml(broken);
+    expect(html).not.toContain("| --- |");
+    expect(html).toContain("Fri");
+    expect(html).toContain("Sat");
+  });
+  it("preserves unrelated prose and fenced code", () => {
+    const prose = "foo | bar | baz";
+    expect(fallbackMalformedPipeTables(prose)).toBe(prose);
+    const fence = "```\n" + screenshot + "\n```";
+    expect(fallbackMalformedPipeTables(fence)).toBe(fence);
   });
 });
 describe("escapeRichMarkdown", () => {
