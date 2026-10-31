@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { VENOM_PULSE_FRAMES, venomActivity, venomPulse, venomStatusLabel, formatHuntDuration, formatConsoleActivity, formatVenomConsole, venomThemeFrame, venomThemeLabel, venomThemeText, venomThemeNumber, formatVenomContextUsage, formatVenomFooter, venomPreset, VENOM_PRESETS, venomSectionTitle, venomTransmissionTitle, venomToolLine, venomToolTag, formatVenomTelemetry, formatVenomTerminalBlock, formatVenomActivityHistory, formatVenomOperationState, formatVenomLiveOperations, formatVenomRichLivePanel, isVenomHud, venomCompletionLabel } from "../venom-theme.ts";
+import { VENOM_PULSE_FRAMES, venomActivity, venomPulse, venomStatusLabel, formatHuntDuration, formatConsoleActivity, formatVenomConsole, venomThemeFrame, venomThemeLabel, venomThemeText, venomThemeNumber, formatVenomContextUsage, formatVenomFooter, venomPreset, VENOM_PRESETS, venomSectionTitle, venomTransmissionTitle, venomToolLine, venomToolTag, formatVenomTelemetry, formatVenomTerminalBlock, formatVenomActivityHistory, formatVenomOperationState, formatVenomLiveOperations, formatVenomRichLivePanel, formatVenomRichInitialPanel, VENOM_RICH_WIDTH_ANCHOR, VENOM_PULSE_WIDTH, isVenomHud, venomCompletionLabel } from "../venom-theme.ts";
 
 describe("Venom Lethal Protector presentation", () => {
   it("cycles through symbiote pulse frames without reporting fictional completion", () => {
@@ -239,12 +239,34 @@ describe("Venom Lethal Protector presentation", () => {
     expect(rich).toContain("## NEURAL LINK");
     expect(rich).toContain("`▰▰▱▱▱▱`");
     expect(rich).toContain("<details>");
-    expect(rich).toContain("<summary>1 earlier traces</summary>");
+    expect(rich).toContain("<summary>Earlier traces</summary>");
     expect(rich).toContain("&lt;secret&gt; &amp; token");
     expect(rich).not.toContain("<blockquote expandable>");
     expect(formatVenomRichLivePanel(operations, {
       visibleOperations: 3, collapseOperations: "off",
     }, meta)).not.toContain("<details>");
+  });
+
+  it("preserves twelve pulse cells and a stable width through tool updates", () => {
+    expect(VENOM_PULSE_WIDTH).toBe(12);
+    expect(VENOM_PULSE_FRAMES).toHaveLength(13);
+    expect(VENOM_PULSE_FRAMES.every(frame => Array.from(frame.pulse).length === 12)).toBe(true);
+    const meta = { title: "VENOM", status: "HUNT ACTIVE",
+      pulse: venomPulse(6).pulse, section: "SYMBIOTE ACTIVITY", transmission: "NEURAL LINK",
+      objective: "Working", model: "qwen", metrics: "CTX 10%" };
+    const op = (i: number) => ({ id: String(i), tag: "EXEC", tool: "bash",
+      detail: "a".repeat(120), state: "running" as const, startedAt: 1 });
+    for (const count of [0, 1, 3, 4, 25]) {
+      const rich = formatVenomRichLivePanel(Array.from({ length: count }, (_, i) => op(i)),
+        { visibleOperations: 3, collapseOperations: "expandable" }, meta);
+      expect(rich).toContain(VENOM_RICH_WIDTH_ANCHOR);
+      expect(rich).toContain("<summary>Earlier traces</summary>");
+      expect(rich).not.toContain("a".repeat(40));
+    }
+    const initial = formatVenomRichInitialPanel({ visibleOperations: 3 });
+    expect(initial).toContain(VENOM_RICH_WIDTH_ANCHOR);
+    expect(initial).toContain("<summary>Earlier traces</summary>");
+    expect(initial).toContain("▱".repeat(12));
   });
 
   it("reports only actual operation states", () => {
