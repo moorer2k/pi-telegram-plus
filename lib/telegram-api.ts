@@ -445,6 +445,9 @@ export function createTelegramTransport(
           // the current Rich card is valid: never overwrite it with HTML.
           if (err instanceof TelegramApiRequestError && /message is not modified/i.test(err.message)) return;
           if (isNetworkError(err)) return;
+          // A deleted or expired target cannot be recovered by changing
+          // formatting. Propagate immediately so the caller can replace it.
+          if (isMissingEditTarget(err)) throw err;
           noteRichFailure("editMessageText", err);
         }
       }
@@ -456,7 +459,8 @@ export function createTelegramTransport(
         parse_mode: "HTML",
         link_preview_options: { is_disabled: true },
       }, undefined, lease).catch((err) => {
-        if (isMissingEditTarget(err) || isNetworkError(err)) throw err;
+        if (isMissingEditTarget(err)) throw err;
+        if (isNetworkError(err)) return; // transient failure: keep existing status card
         warnHtmlFallback("editMessageText", err, first);
         return callApi("editMessageText", {
           chat_id: chatId,
@@ -464,7 +468,8 @@ export function createTelegramTransport(
           text: stripHtml(first),
           link_preview_options: { is_disabled: true },
         }, undefined, lease).catch(err => {
-          if (isMissingEditTarget(err) || isNetworkError(err)) throw err;
+          if (isMissingEditTarget(err)) throw err;
+          if (isNetworkError(err)) return;
           apiLog.debug("editMessageText plain-text fallback failed", { chatId, messageId, err });
         });
       });
