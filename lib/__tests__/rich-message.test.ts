@@ -211,7 +211,7 @@ describe("streaming draft Markdown recovery", () => {
     expect(richMarkdownForDraft("Complete paragraph.\n[unfinished](")).toBe("Complete paragraph.");
   });
   it("does not publish unterminated code fences", () => {
-    expect(richMarkdownForDraft("Intro\n\n```ts\nconst x = 1;")).toBeUndefined();
+    expect(richMarkdownForDraft("Intro\n\n```ts\nconst x = 1;")).toBe("Intro");
   });
   it("preserves completed fenced code", () => {
     expect(richMarkdownForDraft("Intro\n\n```ts\nconst x = 1;\n```\n")).toContain("const x = 1;");
