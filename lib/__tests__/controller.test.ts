@@ -856,8 +856,9 @@ describe("createTelegramController media message behavior", () => {
 
     expect(prompts).toEqual(["A"]);
     expect(firstResolved).toBe(true);
-    expect(session.abort).toHaveBeenCalledTimes(1);
-    expect(sendText).toHaveBeenCalledWith(999, "⏹️ Interrupt requested.", undefined, 3);
+    // /stop must not call session-global abort without an owned Telegram turn.
+    expect(session.abort).not.toHaveBeenCalled();
+    expect(sendText).toHaveBeenCalledWith(999, expect.stringContaining("No turn owned by this chat/topic was interrupted"), undefined, 3);
   });
 
   it("does not block message handling while a command handler is waiting", async () => {
