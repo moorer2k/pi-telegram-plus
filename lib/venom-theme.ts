@@ -4,14 +4,13 @@ import type { VenomThemeOptions } from "./types.ts";
  * No HTML escaping here; the renderer owns escaping of untrusted tool text.
  */
 export const VENOM_PULSE_FRAMES = [
-  { eye: "◐", pulse: "▰▱▱▱▱▱" },
-  { eye: "◓", pulse: "▰▰▱▱▱▱" },
-  { eye: "◑", pulse: "▰▰▰▱▱▱" },
-  { eye: "◒", pulse: "▰▰▰▰▱▱" },
-  { eye: "◐", pulse: "▰▰▰▰▰▱" },
-  { eye: "◓", pulse: "▰▰▰▰▰▰" },
-  { eye: "◑", pulse: "▰▰▰▰▱▱" },
-  { eye: "◒", pulse: "▰▰▱▱▱▱" },
+  { eye: "◐", pulse: "▱▱▱▱▱▱" },
+  { eye: "◓", pulse: "▰▱▱▱▱▱" },
+  { eye: "◑", pulse: "▰▰▱▱▱▱" },
+  { eye: "◒", pulse: "▰▰▰▱▱▱" },
+  { eye: "◐", pulse: "▰▰▰▰▱▱" },
+  { eye: "◓", pulse: "▰▰▰▰▰▱" },
+  { eye: "◑", pulse: "▰▰▰▰▰▰" },
 ] as const;
 
 export type VenomActivity = "awakening" | "tracking" | "examining" | "testing" | "adapting" | "hunting";
@@ -184,6 +183,27 @@ export function formatVenomConsole(
   const selected = lines.slice(-maxLines);
   if (selected.length === 0) return "<code>" + escape(prefix + " " + venomThemeText(options?.awaitingText, VENOM_DEFAULTS.awaitingText)) + "</code>";
   return selected.map(line => "<code>" + escape(prefix + " " + line) + "</code>").join("\n");
+}
+
+/** Telegram-native compact inline-code rows. Unlike <pre>, these avoid
+ * large full-width copy-code cards for a handful of short operations. */
+export function formatVenomCompactOperations(
+  lines: readonly string[],
+  escape: (text: string) => string,
+  options?: VenomThemeOptions,
+): string {
+  const prefix = venomThemeText(options?.consolePrefix, VENOM_DEFAULTS.consolePrefix, 8);
+  const size = venomThemeNumber(options?.visibleOperations, 3, 1, 8);
+  const selected = lines.slice(-size);
+  if (!selected.length) return "<i>" + escape(venomThemeText(options?.awaitingText, VENOM_DEFAULTS.awaitingText)) + "</i>";
+  return selected.map(line => {
+    const match = /^\\[([A-Z]+)\\]\\s*(.*)$/.exec(line);
+    const label = match?.[1];
+    const detail = (match?.[2] ?? line).slice(0, 110);
+    return label && /^(RECON|READ|PATCH|VERIFY|EXEC|TRACE|ERROR)$/.test(label)
+      ? "<b>[" + label + "]</b> <code>" + escape(prefix + " " + detail) + "</code>"
+      : "<code>" + escape(prefix + " " + detail) + "</code>";
+  }).join("\n");
 }
 
 /** Render only measured context usage; never invent a percentage or limit. */
