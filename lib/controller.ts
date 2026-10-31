@@ -1870,6 +1870,26 @@ export function createTelegramController(deps: {
         }
         return;
       }
+      if (trimmed === "/react" || trimmed.startsWith("/react ")) {
+        const emoji = trimmed.slice("/react".length).trim();
+        const targetMessageId = message.reply_to_message?.message_id;
+        if (!emoji || !targetMessageId) {
+          await deps.transport.sendText(chatId, "Reply to a message with /react <emoji>.", messageThreadId, sourceMessageId);
+          return;
+        }
+        if (!deps.transport.setReaction) {
+          await deps.transport.sendText(chatId, "Telegram reactions are unavailable on this transport.", messageThreadId, sourceMessageId);
+          return;
+        }
+        try {
+          await deps.transport.setReaction(chatId, targetMessageId, emoji);
+          ctrlLog.info("telegram message reaction applied", { chatId, messageThreadId, targetMessageId });
+        } catch (err) {
+          ctrlLog.error("telegram message reaction failed", { chatId, messageThreadId, targetMessageId, err });
+          await deps.transport.sendText(chatId, "Reaction failed. The emoji may be unsupported or the bot lacks permission.", messageThreadId, sourceMessageId);
+        }
+        return;
+      }
       if (trimmed === "/queue" || trimmed === "/queue clear" || trimmed === "/queue all") {
         const key = targetKey(chatId, messageThreadId);
         const pending = pendingPromptCounts.get(key) ?? 0;
