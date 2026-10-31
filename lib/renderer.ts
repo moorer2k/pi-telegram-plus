@@ -802,6 +802,11 @@ ${partial}`);
       for (let attempt = 0; attempt < 80 && progress.editing; attempt++) {
         await new Promise<void>(resolve => setTimeout(resolve, 25));
       }
+      // Do not finalize while a native draft request is still in flight.
+      for (let attempt = 0; attempt < 80 && draftBusy; attempt++) {
+        await new Promise<void>(resolve => setTimeout(resolve, 25));
+      }
+      draftEnabled = false;
       // Preserve intermediate responses, including useful tool findings,
       // instead of replacing them with only the last assistant text.
       const final = progress.messages.join("\n\n");
