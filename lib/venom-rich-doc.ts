@@ -8,7 +8,7 @@ export type VenomBlock =
   | { kind: "code"; value: string }
   | { kind: "details"; title: string; lines: string[] };
 
-const escapeRich = (value: string): string => value.replace(/&/g, "&amp;").replace(/</g, "&lt;")
+const escapeRich = (value: string): string => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
   .replace(/([\\*_~`#[\]()!|])/g, "\\$1");
 const clean = (value: string): string => String(value || "").replace(/\s+/g, " ").trim();
 export function shortenVenomCommand(raw: string, max = 36): string {
@@ -23,7 +23,7 @@ export function shortenVenomCommand(raw: string, max = 36): string {
   return chars.length <= max ? text : chars.slice(0, max - 1).join("") + "…";
 }
 function code(value: string): string {
-  return "`" + clean(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/`/g, "\x27") + "`";
+  return "`" + clean(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/`/g, "\x27") + "`";
 }
 export function renderVenomBlocks(blocks: readonly VenomBlock[]): string {
   return blocks.map(block => {
