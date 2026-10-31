@@ -1,13 +1,21 @@
 /**
- * Per-target session lifecycle. A factory must create a genuinely independent
- * Pi session; this registry never aliases the owner's active session.
+ * Lifecycle manager for genuinely independent Pi sessions.
+ *
+ * Factories must never return the shared owner session. Each chat/topic has a
+ * distinct key and can be disposed without affecting another target.
  */
 export type SessionTarget = { chatId: number; messageThreadId?: number };
 export type SessionLease<T> = { target: SessionTarget; session: T };
 
+type Entry<T> = {
+  target: SessionTarget;
+  pending: Promise<T>;
+  retired: boolean;
+  disposeOnce: Promise<void> | undefined;
+};
+
 export class IsolatedSessionRegistry<T> {
-  private readonly sessions = new Map<string, Promise<T>>();
-  private readonly keys = new Map<string, SessionTarget>();
+  private readonly entries = new Map<string, Entry<T>>();
   private closed = false;
 
   constructor(
@@ -19,52 +27,61 @@ export class IsolatedSessionRegistry<T> {
     return JSON.stringify([target.chatId, target.messageThreadId ?? null]);
   }
 
+  private retire(entry: Entry<T>): Promise<void> {
+    if (entry.disposeOnce) return entry.disposeOnce;
+    entry.retired = true;
+    const key = IsolatedSessionRegistry.key(entry.target);
+    if (this.entries.get(key) === entry) this.entries.delete(key);
+    entry.disposeOnce = entry.pending.then(
+      (session) => this.disposeSession(session),
+      () => undefined, // A rejected factory produced no session to dispose.
+    );
+    return entry.disposeOnce;
+  }
+
   async get(target: SessionTarget): Promise<SessionLease<T>> {
     if (this.closed) throw new Error("Session registry is closed");
     const key = IsolatedSessionRegistry.key(target);
-    let pending = this.sessions.get(key);
-    if (!pending) {
+    let entry = this.entries.get(key);
+    if (!entry) {
       const ownTarget = { ...target };
-      pending = Promise.resolve().then(() => this.create(ownTarget));
-      this.sessions.set(key, pending);
-      this.keys.set(key, ownTarget);
-      // A failed initialization must be retryable, not cached forever.
-      void pending.catch(() => {
-        if (this.sessions.get(key) === pending) {
-          this.sessions.delete(key);
-          this.keys.delete(key);
+      entry = {
+        target: ownTarget,
+        pending: Promise.resolve().then(() => this.create(ownTarget)),
+        retired: false,
+        disposeOnce: undefined,
+      };
+      this.entries.set(key, entry);
+      const created = entry;
+      // A failed initialization must be retryable.
+      void created.pending.catch(() => {
+        if (this.entries.get(key) === created) {
+          this.entries.delete(key);
+          created.retired = true;
         }
       });
     }
-    const session = await pending;
-    if (this.closed || this.sessions.get(key) !== pending) {
-      await this.disposeSession(session);
+    const session = await entry.pending;
+    if (this.closed || entry.retired || this.entries.get(key) !== entry) {
+      // The releasing caller owns disposal. Never dispose a shared
+      // initialization result twice when multiple get() calls are waiting.
       throw new Error("Session was released during initialization");
     }
-    return { target: { ...target }, session };
+    return { target: { ...entry.target }, session };
   }
 
   async release(target: SessionTarget): Promise<void> {
-    const key = IsolatedSessionRegistry.key(target);
-    const pending = this.sessions.get(key);
-    if (!pending) return;
-    this.sessions.delete(key);
-    this.keys.delete(key);
-    try { await this.disposeSession(await pending); }
-    catch (err) {
-      // Initialization failures have nothing to dispose.
-      if (this.closed) throw err;
-    }
+    const entry = this.entries.get(IsolatedSessionRegistry.key(target));
+    if (entry) await this.retire(entry);
   }
 
   list(): SessionTarget[] {
-    return [...this.keys.values()].map((target) => ({ ...target }));
+    return [...this.entries.values()].map((entry) => ({ ...entry.target }));
   }
 
   async dispose(): Promise<void> {
     if (this.closed) return;
     this.closed = true;
-    const targets = this.list();
-    await Promise.all(targets.map((target) => this.release(target)));
+    await Promise.all([...this.entries.values()].map((entry) => this.retire(entry)));
   }
 }
