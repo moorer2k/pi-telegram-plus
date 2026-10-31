@@ -141,3 +141,11 @@ The earlier Venom status card was rendered exclusively using Telegram's ordinary
 The live-progress renderer now attempts an `editMessageText` call with `rich_message.markdown` for every status update. It uses actual level-two Markdown headings (`##`), a dedicated six-cell pulse line, a bounded bullet list of structured tool events, and native `<details><summary>...` history. The existing Telegram HTML card is retained as a fallback when Rich Messages are unsupported or rejected.
 
 This uses the **same transport capability already present for the plugin's rich final replies**, not a new UI implementation. Self-hosted Bot API endpoints must support Rich Messages (the project tracks this as Bot API 10.1+). If the API server rejects `rich_message`, the transport logs the error and continues to edit the HTML fallback; this means headings will still look smaller. Inspect logs for `Rich Messages are not supported` or `Rich Message rejected` before assuming the HUD styles are active. Telegram client versions may differ in their rendering.
+
+## Rich progress delivery lifecycle and diagnostics
+
+For a fresh Telegram-originated turn in `Tool: progress` mode, the controller now calls `sendRichMessage` to create the **initial** progress placeholder (using `sendText` with a Rich Markdown argument). Subsequent updates call `editMessageText` with `rich_message.markdown` using the message ID returned by that original Rich send.
+
+The transport no longer disables Rich Messages globally because an individual edit failed with `message text is empty`. Only a definitive unknown `sendRichMessage` method error disables Rich globally for the process. A repeated animation frame may elicit `message is not modified`; that is treated as a successful no-op and **does not** downgrade the status message to HTML.
+
+To verify a live agent: the initial request should use `sendRichMessage`, followed by `editMessageText` requests with `rich_message` and no `parse_mode`. A log entry `Rich Message rejected; falling back to HTML` indicates a content- or edit-specific failure that must be investigated. The richer formatting is not active until this code is merged and the running plugin updated/restarted.
