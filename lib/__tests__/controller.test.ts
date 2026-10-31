@@ -1402,6 +1402,76 @@ describe("createTelegramController — callback keyboard cleanup ownership", () 
   });
 });
 
+describe("Telegram reaction command integration", () => {
+  function setupReactionTransport() {
+    const setReaction = vi.fn(async (_chat: number, _message: number, _emoji: string) => undefined);
+    const sendText = vi.fn(async () => [{ message_id: 1 }]);
+    const transport = {
+      removeInlineKeyboard: async () => undefined,
+      sendText,
+      sendButtons: async () => ({ message_id: 1 }),
+      editText: async () => undefined,
+      editButtons: async () => undefined,
+      answerCallbackQuery: async () => undefined,
+      deleteMessage: async () => undefined,
+      sendDocument: async () => undefined,
+      sendPhoto: async () => undefined,
+      sendChatAction: async () => undefined,
+      setReaction,
+    };
+    const controller = createTelegramController({
+      getSession: () => undefined,
+      transport,
+      ui: {
+        create: () => ({ notify: async () => undefined }) as any,
+        resolveInput: () => ({ handled: false }),
+        isSensitiveInput: () => false,
+        hasPendingInput: () => false,
+        dispose: async () => undefined,
+      },
+      authorizeUser: async () => true,
+      setActiveChatId: async () => undefined,
+      getBotUsername: () => "test-bot",
+      telegramCommands: new Map(),
+      getActiveTurn: () => undefined,
+      beginTelegramTurn: (chatId: number) => ({ chatId, queuedAttachments: [] }),
+      endTelegramTurn: () => undefined,
+    });
+    const send = (messageId: number, text: string, targetId?: number) =>
+      controller.handleMessage({
+        message_id: messageId, chat: { id: 100 }, text,
+        ...(targetId === undefined ? {} : { reply_to_message: { message_id: targetId, chat: { id: 100 } } }),
+      });
+    return { controller, send, setReaction, sendText };
+  }
+
+  it("applies and removes reactions only on replied-to messages", async () => {
+    const { controller, send, setReaction } = setupReactionTransport();
+    await send(1, "/react 👍", 51);
+    await send(2, "/unreact", 52);
+    expect(setReaction).toHaveBeenNthCalledWith(1, 100, 51, "👍");
+    expect(setReaction).toHaveBeenNthCalledWith(2, 100, 52, "");
+    controller.dispose();
+  });
+
+  it("rejects missing reply targets without calling the reaction API", async () => {
+    const { controller, send, setReaction, sendText } = setupReactionTransport();
+    await send(1, "/react 👍");
+    await send(2, "/unreact");
+    expect(setReaction).not.toHaveBeenCalled();
+    expect(sendText).toHaveBeenCalledWith(100, expect.stringContaining("Reply to a message"), undefined, 1);
+    controller.dispose();
+  });
+
+  it("reports Telegram reaction failures without crashing command handling", async () => {
+    const { controller, send, setReaction, sendText } = setupReactionTransport();
+    setReaction.mockRejectedValueOnce(new Error("reaction unavailable"));
+    await expect(send(1, "/react 👍", 51)).resolves.toBeUndefined();
+    expect(sendText).toHaveBeenCalledWith(100, expect.stringContaining("Reaction failed"), undefined, 1);
+    controller.dispose();
+  });
+});
+
 describe("Telegram queue control integration", () => {
   function setup() {
     const prompts: string[] = [];
