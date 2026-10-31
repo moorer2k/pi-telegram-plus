@@ -499,8 +499,48 @@ export function registerTelegramRenderer(
     for (const event of events) await sendInlineEvent(event);
   };
 
+  // Native Telegram drafts provide low-flicker partial answers in private DMs.
+  // The existing message renderer remains authoritative for final delivery.
+  let draftSequence = 0;
+  let draftLastSent = 0;
+  let draftDisabled = false;
+  let draftBusy = false;
+  let draftTarget = "";
+  let draftId = 1;
+  (pi as any).on("message_update", async (event: any) => {
+    const turn = deps.getActiveTurn();
+    if (!turn || turn.chatId <= 0 || turn.messageThreadId !== undefined || !deps.transport.sendDraft || draftDisabled || draftBusy) return;
+    if (isBackgroundAgentActivity()) return;
+    const key = String(turn.chatId) + ":" + String(turn.sourceMessageId ?? "");
+    if (draftTarget !== key) return;
+    if (Date.now() - draftLastSent < 900) return;
+    const message = event?.message;
+    if (message?.role !== "assistant") return;
+    const rendered = contentToRenderParts(message.content, "hidden", "hidden");
+    const preview = redactFor(turn, rendered.body).trim();
+    if (!preview) return;
+    // Preserve the most recent output for long responses, without splitting
+    // a UTF-8 sequence or exceeding Telegram's draft payload limit.
+    const safe = Array.from(preview).slice(-3500).join("");
+    draftBusy = true;
+    draftLastSent = Date.now();
+    try {
+      await deps.transport.sendDraft(turn.chatId, draftId, safe);
+    } catch (err) {
+      draftDisabled = true;
+      renderLog.warn("native draft unavailable; retaining normal message delivery", { chatId: turn.chatId, err });
+    } finally {
+      draftBusy = false;
+    }
+  });
+
   pi.on("agent_start", async () => {
     try {
+    const draftTurn = deps.getActiveTurn();
+    draftTarget = draftTurn ? String(draftTurn.chatId) + ":" + String(draftTurn.sourceMessageId ?? "") : "";
+    draftId = (++draftSequence % 2147483646) + 1;
+    draftDisabled = false;
+    draftLastSent = 0;
     sentInlineEvents.clear();
     toolArgs.clear();
     toolUpdateAt.clear();
@@ -721,6 +761,7 @@ ${partial}`);
   });
 
   pi.on("agent_end", async () => {
+    draftTarget = "";
     try {
       if (!progressMode() || !progress.target || progressTarget() !== progress.target) return;
       const turn = deps.getActiveTurn();
