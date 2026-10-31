@@ -421,8 +421,9 @@ export function formatVenomRichLivePanel(
     const raw = (op.detail || op.tool).replace(/^(?:bash|terminal|exec):\s*/i, "");
     const detail = venomRichShort(raw, VENOM_RICH_DETAIL_WIDTH);
     const glyph = op.state === "failed" ? "×" : op.state === "done" ? "◆" : "◈";
+    const safeCode = detail.replace(/&/g, "&amp;").replace(/</g, "&lt;").replaceAll("`", "'");
     return "**" + glyph + " " + tag + escaped(state) + "**\n" +
-      "`" + escaped(detail.replaceAll("`", "'")) + "`";
+      "`" + safeCode + "`";
   };
   const slots = [...recent.map(line)];
   if (options?.fixedOperationRows !== false) {
