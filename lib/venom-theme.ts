@@ -288,7 +288,7 @@ export function formatVenomActivityHistory(
   const older = lines.slice(0, Math.max(0, lines.length - count));
   const prefix = venomThemeText(options?.consolePrefix, VENOM_DEFAULTS.consolePrefix, 8);
   const formatLine = (line: string): string => {
-    const match = /^\\[([A-Z]+)\\]\\s*(.*)$/.exec(line);
+    const match = /^\[([A-Z]+)\]\s*(.*)$/.exec(line);
     const tag = match?.[1];
     const raw = match?.[2] ?? line;
     const detail = options?.operationDetail === "full" ? raw.slice(0, 140) : raw.slice(0, 75);
