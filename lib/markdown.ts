@@ -254,6 +254,10 @@ export function normalizeFlattenedTables(markdown: string): string {
  * between the compressed header, separator, and data rows. */
 export function normalizeWrappedFlattenedTables(markdown: string): string {
   const lines = markdown.split("\n");
+  // Preserve valid GFM tables before attempting to join malformed fragments.
+  // Otherwise the recovery pass can consume the header and separator as one
+  // flattened row, leaving the actual data outside the table.
+  const realTableLines = markRealTableLines(lines);
   const out: string[] = [];
   let inFence = false;
   let fenceChar = "";
@@ -265,14 +269,14 @@ export function normalizeWrappedFlattenedTables(markdown: string): string {
       else if (fenceChar === marker) { inFence = false; fenceChar = ""; }
       out.push(line); i++; continue;
     }
-    if (inFence || !line.includes("|")) { out.push(line); i++; continue; }
+    if (inFence || realTableLines[i] || !line.includes("|")) { out.push(line); i++; continue; }
     const direct = normalizeFlattenedTables(line);
     if (direct !== line) { out.push(direct); i++; continue; }
     let recovered: string | undefined;
     let consumed = 0;
     for (let n = 2; n <= 4 && i + n <= lines.length; n++) {
       const group = lines.slice(i, i + n);
-      if (group.some(part => !part.trim() || !part.includes("|") || fenceMarker(part))) break;
+      if (group.some((part, offset) => realTableLines[i + offset] || !part.trim() || !part.includes("|") || fenceMarker(part))) break;
       const joined = group.join(" ");
       const normalized = normalizeFlattenedTables(joined);
       if (normalized !== joined && hasGfmTable(normalized)) {
