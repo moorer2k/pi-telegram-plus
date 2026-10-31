@@ -43,17 +43,22 @@ export async function configVenomThemeFlow(ui: MenuUi, deps: TgConfigDeps): Prom
       "Animation: " + (theme.animation ?? "symbiote"),
       "Pulse visibility: " + (theme.showPulse === false ? "off" : "on"),
       "Animation interval: " + venomThemeNumber(theme.animationIntervalMs, 2600, 1800, 15000) + "ms",
-      "Console entries: " + venomThemeNumber(theme.visibleOperations, 3, 1, 8),
+      "Console entries: " + venomThemeNumber(theme.visibleOperations, 3, 1, 12),
       "Preview characters: " + venomThemeNumber(theme.previewLength, 500, 100, 1500),
       "Show operation count: " + (theme.showOperations === false ? "off" : "on"),
       "Show hunting time: " + (theme.showElapsed === false ? "off" : "on"),
+      "Collapse history: " + (theme.collapseOperations ?? "off"),
+      "Tool details: " + (theme.operationDetail ?? "compact"),
+      "Show tool states: " + (theme.showOperationStates === false ? "off" : "on"),
+      "Show objective: " + (theme.showObjective === false ? "off" : "on"),
+      "Footer density: " + (theme.footerDensity ?? "normal"),
       "Reset Venom appearance",
       BACK,
     ];
     const choice = await pick(ui, "Venom appearance", options);
     if (!choice || choice === BACK) return;
     if (choice === options[0]) {
-      const presets: VenomThemePreset[] = ["blacksite", "lethal-protector", "minimal-terminal"];
+      const presets: VenomThemePreset[] = ["symbiote-hud", "predator-terminal", "classified", "blacksite", "lethal-protector", "minimal-terminal"];
       const selected = await pick(ui, "Venom presentation preset (replaces preset headings and labels)", presets);
       if (!selected || !presets.includes(selected as VenomThemePreset)) continue;
       const preset = selected as VenomThemePreset;
@@ -98,7 +103,7 @@ export async function configVenomThemeFlow(ui: MenuUi, deps: TgConfigDeps): Prom
       const isInterval = choice === options[5];
       const isCount = choice === options[6];
       const key = isInterval ? "animationIntervalMs" : isCount ? "visibleOperations" : "previewLength";
-      const [min, max, initial] = isInterval ? [1800, 15000, 2600] : isCount ? [1, 8, 3] : [100, 1500, 500];
+      const [min, max, initial] = isInterval ? [1800, 15000, 2600] : isCount ? [1, 12, 3] : [100, 1500, 500];
       const input = await ui.input(key + " (" + min + " to " + max + ")", String(venomThemeNumber(theme[key], initial, min, max)));
       if (input === undefined) continue;
       const n = Number(input.trim());
@@ -112,6 +117,19 @@ export async function configVenomThemeFlow(ui: MenuUi, deps: TgConfigDeps): Prom
     } else if (choice === options[9]) {
       await save(deps, { ...theme, showElapsed: theme.showElapsed === false });
     } else if (choice === options[10]) {
+      const selected = await pick(ui, "Earlier activity", ["off", "expandable"]);
+      if (selected === "off" || selected === "expandable") await save(deps, { ...theme, collapseOperations: selected });
+    } else if (choice === options[11]) {
+      const selected = await pick(ui, "Operation verbosity", ["compact", "full"]);
+      if (selected === "compact" || selected === "full") await save(deps, { ...theme, operationDetail: selected });
+    } else if (choice === options[12]) {
+      await save(deps, { ...theme, showOperationStates: theme.showOperationStates === false });
+    } else if (choice === options[13]) {
+      await save(deps, { ...theme, showObjective: theme.showObjective === false });
+    } else if (choice === options[14]) {
+      const selected = await pick(ui, "Telemetry density", ["compact", "normal"]);
+      if (selected === "compact" || selected === "normal") await save(deps, { ...theme, footerDensity: selected });
+    } else if (choice === options[15]) {
       if (await ui.confirm("Reset Venom appearance?", "Restore all default theme labels, animations and layout settings?")) {
         await save(deps, {});
       }

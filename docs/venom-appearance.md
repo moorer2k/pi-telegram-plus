@@ -69,3 +69,41 @@ Tool labels describe observed operations, never fictional stages. The animated p
 Blacksite now uses Telegram's native HTML formatting for visual hierarchy: bold header and active status, underlined terminal heading, a single preformatted monospace tool block, a native blockquote around the current assistant transmission, and compact inline-code/italic telemetry. No color or client theme override is attempted. Plain Lethal Protector and Minimal Terminal retain their existing output.
 
 Progress updates remain edits of the existing Telegram message. All dynamic tool and assistant content is HTML-escaped before insertion, link preview behavior is unchanged, and existing theme settings require no migration.
+
+## Hermes-inspired HUD themes and history
+
+Select a layout under `/tg → Config → Venom appearance → Preset`:
+
+- `symbiote-hud`: clear Lethal Protector heading, current status, objective, operation lifecycle, and telemetry.
+- `predator-terminal`: terse terminal status and compact tool rows.
+- `classified`: intelligence-report vocabulary and explicit operation status.
+- Existing `blacksite`, `lethal-protector`, and `minimal-terminal` remain selectable.
+
+The three new HUD themes expose extra settings in the same menu:
+
+- **Collapse history**: `off` (show only the latest X) or `expandable` (show latest X with a native Telegram expandable quote containing older operations, capped to 20 older lines).
+- **Console entries**: latest X operations, 1–12.
+- **Tool details**: `compact` or `full`, truncating each display row to 75 or 140 characters.
+- **Show tool states**: show/hide actual completed, running and failed operation counts.
+- **Show objective**: show/hide the latest captured assistant update.
+- **Footer density**: `compact` single line or `normal` multi-line.
+
+Example (merge into your existing `.pi/telegram.json`):
+
+```json
+{
+  "venomTheme": {
+    "preset": "symbiote-hud",
+    "visibleOperations": 4,
+    "collapseOperations": "expandable",
+    "operationDetail": "compact",
+    "showOperationStates": true,
+    "showObjective": true,
+    "footerDensity": "compact"
+  }
+}
+```
+
+The HUD doesn't infer a task plan or verification success from tool names: counts are tracked from real tool start/end events. Telegram HTML `<blockquote expandable>` provides optional tap-to-expand history without requiring Rich Message support. A hidden history mode never injects older events.
+
+The controller also blocks unknown slash-command callback payloads from launching a management command, preventing a stale `/tg` button from being treated as an unsolicited command. Genuine explicit `/tg` messages are logged with their originating Telegram message ID to assist further diagnosis.
