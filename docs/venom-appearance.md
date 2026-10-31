@@ -107,3 +107,17 @@ Example (merge into your existing `.pi/telegram.json`):
 The HUD doesn't infer a task plan or verification success from tool names: counts are tracked from real tool start/end events. Telegram HTML `<blockquote expandable>` provides optional tap-to-expand history without requiring Rich Message support. A hidden history mode never injects older events.
 
 The controller also blocks unknown slash-command callback payloads from launching a management command, preventing a stale `/tg` button from being treated as an unsolicited command. Genuine explicit `/tg` messages are logged with their originating Telegram message ID to assist further diagnosis.
+
+## Stable HUD layout and native activity expansion
+
+All six Venom presets now share a compact Telegram HTML status renderer rather than switching between large `<pre>` blocks, inline-terminal rows, and different content structures. Titles, status labels, six-cell pulses, activity, objective, and telemetry each occupy independent rows. The pulse resets only after completing its full cycle and no longer pushes the adjacent status text around.
+
+New `Fixed operation rows` setting defaults **on**. A visible count of X (1–12) reserves exactly X tool slots; unused slots display a small "awaiting operation" placeholder, so incoming tool events replace existing rows rather than changing the height of the bubble. When enabled, activity summaries are clipped to 36 characters to avoid mobile wraps. Turn it off to allow naturally sized rows and longer lines.
+
+`Collapse history → expandable` uses Telegram's built-in expandable HTML blockquote, not a custom inline button or Telegram Rich Message `<details>` element. It appears **only after the number of operations exceeds the visible X limit**. Newest X operations always remain above the collapsed older log. Choose `off` to omit old history entirely. Expandable quotes need an up-to-date Telegram client that supports that HTML entity type.
+
+Operation totals no longer appear twice: when operation-state counts are displayed (`N done · N running · N failed`), the footer omits the redundant total operation count. The latest assistant preview is constrained to a single short paragraph to reduce layout movement. Existing Telegram Rich Messages for qualifying final-reply tables are unchanged.
+
+Recommended menu configuration: `/tg → Config → Venom appearance`, choose `Symbiote HUD`, set `Console entries=3`, `Collapse history=expandable`, `Fixed operation rows=on`, `Show tool states=on`, `Footer density=compact`.
+
+Note: Telegram controls message bubble width and font sizing. This redesign minimizes reflows but the Bot API cannot guarantee identical pixel dimensions after every edit.
