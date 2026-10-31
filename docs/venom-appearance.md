@@ -133,3 +133,11 @@ Older trace entries appear below current slots in a native Telegram **expandable
 Tool state is shown on the individual tool rows; the footer deliberately omits the duplicate operation count. Telemetry reserves a model row and a context/time row (`Footer density: normal`), or a bounded compact row if requested. `Show tool states`, `Show objective`, `Show pulse`, `Fixed operation rows`, and existing preset options remain configurable.
 
 This only applies to live progress. The final assistant answer continues to be sent as the actual response, rather than retaining a permanently animated placeholder. Telegram controls the chat bubble’s exact width and text layout, so completely invariant pixel dimensions across every client cannot be guaranteed.
+
+## Why large Telegram headings require Rich Messages
+
+The earlier Venom status card was rendered exclusively using Telegram's ordinary `parse_mode: HTML`. HTML `<b>` makes headings bold but **does not increase their size**, and `<blockquote expandable>` is a quote widget rather than the native Rich Markdown details block used by Hermes progress-tail.
+
+The live-progress renderer now attempts an `editMessageText` call with `rich_message.markdown` for every status update. It uses actual level-two Markdown headings (`##`), a dedicated six-cell pulse line, a bounded bullet list of structured tool events, and native `<details><summary>...` history. The existing Telegram HTML card is retained as a fallback when Rich Messages are unsupported or rejected.
+
+This uses the **same transport capability already present for the plugin's rich final replies**, not a new UI implementation. Self-hosted Bot API endpoints must support Rich Messages (the project tracks this as Bot API 10.1+). If the API server rejects `rich_message`, the transport logs the error and continues to edit the HTML fallback; this means headings will still look smaller. Inspect logs for `Rich Messages are not supported` or `Rich Message rejected` before assuming the HUD styles are active. Telegram client versions may differ in their rendering.
