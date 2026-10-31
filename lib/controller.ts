@@ -1216,7 +1216,7 @@ export function createTelegramController(deps: {
     }
   };
 
-  const submitText = async (text: string, chatId: number, replaceMessageId?: number, messageThreadId?: number, sourceMessageId?: number) => {
+  const submitText = async (text: string, chatId: number, replaceMessageId?: number, messageThreadId?: number, sourceMessageId?: number): Promise<boolean> => {
     // Chain behind the previous prompt for this chat/thread so multiple
     // messages are delivered to the main thread in order.
     const key = targetKey(chatId, messageThreadId);
@@ -1227,7 +1227,7 @@ export function createTelegramController(deps: {
       ctrlLog.warn("telegram prompt queue capacity reached", { chatId, messageThreadId, pending });
       await deps.transport.sendText(chatId, "Queue full (32 pending messages). Use /queue clear or wait for delivery.", messageThreadId, sourceMessageId)
         .catch(ctrlLog.swallow("warn", "queue capacity notice failed", { chatId, messageThreadId }));
-      return;
+      return false;
     }
     const generation = getInterruptGeneration(key);
     pendingPromptCounts.set(key, pending + 1);
@@ -1247,6 +1247,7 @@ export function createTelegramController(deps: {
       })
       .catch((err) => reportPromptFailure("prompt-delivery", chatId, messageThreadId, sourceMessageId, err));
     setTail(key, task);
+    return true;
   };
 
   // §4.5 rule 6: a command arriving while a dialog is still waiting is the remote user
@@ -1747,8 +1748,8 @@ export function createTelegramController(deps: {
             await deps.transport.sendText(chatId, "Follow-up failed. Check the Telegram error log.", messageThreadId, sourceMessageId);
           }
         } else {
-          await submitText(instruction, chatId, undefined, messageThreadId, sourceMessageId);
-          await deps.transport.sendText(chatId, "Instruction submitted to the normal prompt queue.", messageThreadId, sourceMessageId);
+          const accepted = await submitText(instruction, chatId, undefined, messageThreadId, sourceMessageId);
+          if (accepted) await deps.transport.sendText(chatId, "Instruction submitted to the normal prompt queue.", messageThreadId, sourceMessageId);
         }
         return;
       }
