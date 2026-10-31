@@ -1709,9 +1709,15 @@ export function createTelegramController(deps: {
         return;
       }
       if (message.reply_to_message || message.quote || message.text_quote || message.external_reply) logTelegramReplyContext(message);
-      if (trimmed === "/queue" || trimmed === "/queue clear") {
+      if (trimmed === "/queue" || trimmed === "/queue clear" || trimmed === "/queue all") {
         const key = targetKey(chatId, messageThreadId);
         const pending = pendingPromptCounts.get(key) ?? 0;
+        if (trimmed === "/queue all") {
+          // Aggregate counts only; do not expose other chats' messages or IDs.
+          const total = [...pendingPromptCounts.values()].reduce((sum, count) => sum + count, 0);
+          await deps.transport.sendText(chatId, `Pending across active chat/topic queues: ${total}.`, messageThreadId, sourceMessageId);
+          return;
+        }
         if (trimmed === "/queue clear") {
           // Invalidate waiting messages only; leave the running turn alone.
           bumpInterruptGeneration(key);
