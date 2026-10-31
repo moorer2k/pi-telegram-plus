@@ -1023,7 +1023,7 @@ export function createTelegramController(deps: {
   // agent's turn instead (repo issue #10).
   const deliverToMainThread = async (text: string, chatId: number, messageThreadId: number | undefined, sourceMessageId: number | undefined): Promise<void> => {
     const session = deps.getSession();
-    if (!session) return;
+    if (!session) throw new Error("Pi session unavailable during queued prompt delivery");
     const ctx = session.extensionRunner.createCommandContext();
     const idleFn = typeof (ctx as any).isIdle === "function" ? (ctx as any).isIdle : undefined;
     const waitFn = typeof (ctx as any).waitForIdle === "function" ? (ctx as any).waitForIdle : undefined;
@@ -1050,9 +1050,10 @@ export function createTelegramController(deps: {
           try {
             await waitFn.call(ctx);
           } catch (err) {
-            // Session disposed / torn down during the wait — nothing to deliver to.
-            ctrlLog.debug("waitForIdle during main-delivery hold interrupted", { chatId, messageThreadId, err });
-            return;
+            // Surface interrupted waits to the queue failure handler instead of
+            // silently acknowledging a prompt that never reached the agent.
+            ctrlLog.warn("waitForIdle during main-delivery hold interrupted", { chatId, messageThreadId, err });
+            throw err;
           }
         } else {
           await sleep(500);
@@ -1079,7 +1080,7 @@ export function createTelegramController(deps: {
         await sleep(120);
       }
     }
-    await reportPromptFailure("main-delivery", chatId, messageThreadId, sourceMessageId, new Error("main-mode delivery attempts exhausted"));
+    throw new Error("main-mode delivery attempts exhausted");
   };
 
   // Hold-and-deliver path shared by "main" and idle-"tui": wait until the
@@ -1096,7 +1097,7 @@ export function createTelegramController(deps: {
     const session = deps.getSession();
     if (!session) {
       deps.endTelegramTurn(chatId, turn);
-      return;
+      throw new Error("Pi session unavailable after Telegram turn acquisition");
     }
     const telegramUi = deps.ui.create(chatId, messageThreadId, sourceMessageId);
     try {
