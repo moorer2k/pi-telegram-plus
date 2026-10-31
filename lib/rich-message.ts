@@ -22,15 +22,63 @@ import { hasGfmTable, normalizeWrappedFlattenedTables, normalizeListParagraphSpa
 export const TELEGRAM_RICH_TEXT_LIMIT = 30_000;
 
 /**
- * Escape the two characters that could make model output look like Telegram
- * Rich Markdown markup. Rich Markdown accepts HTML tags, so an unescaped `<`
- * from a tool result or a code sample would be interpreted as markup.
- *
- * `>` is deliberately left alone: it cannot open a tag on its own, and escaping
- * it would turn `> quoted line` into literal text instead of a blockquote.
+ * Rich Markdown is not Telegram HTML parse mode. Escaping ampersands and
+ * angle brackets as HTML entities makes them appear literally in code and
+ * prose (e.g. `&lt;` instead of `<`). Preserve source text verbatim.
  */
 export function escapeRichMarkdown(text: string): string {
-  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  return text;
+}
+
+/**
+ * Normalize TeX display/inline delimiters for Telegram's Rich Markdown math
+ * dialect. Do not touch fenced code or inline code spans. Preserve escaped
+ * backslashes and only rewrite paired delimiters.
+ */
+export function normalizeRichMathDelimiters(markdown: string): string {
+  let fence: { marker: string; width: number } | undefined;
+  let inDisplay = false;
+  let inInline = false;
+  return markdown.split("\n").map((line) => {
+    const fm = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+    if (fm) {
+      const token = fm[1];
+      if (!fence && !(token[0] === "`" && fm[2].includes("`"))) {
+        fence = { marker: token[0], width: token.length };
+        return line;
+      }
+      if (fence && token[0] === fence.marker && token.length >= fence.width && !fm[2].trim()) {
+        fence = undefined;
+        return line;
+      }
+    }
+    if (fence) return line;
+    // Protect inline backtick spans from delimiter conversion.
+    const segments = line.split(/(`+[^`\n]*`+)/g);
+    return segments.map((segment, index) => {
+      if (index % 2 === 1) return segment;
+      return segment.replace(/(?<!\\)\\(\[|\]|\(|\))/g, (match, delimiter) => {
+        if (delimiter === "[") {
+          if (inInline || inDisplay) return match;
+          inDisplay = true;
+          return "$$";
+        }
+        if (delimiter === "]") {
+          if (!inDisplay) return match;
+          inDisplay = false;
+          return "$$";
+        }
+        if (delimiter === "(") {
+          if (inDisplay || inInline) return match;
+          inInline = true;
+          return "$";
+        }
+        if (!inInline) return match;
+        inInline = false;
+        return "$";
+      });
+    }).join("");
+  }).join("\n");
 }
 
 /** Match fenced blocks by delimiter and minimum opening width. */
@@ -62,7 +110,7 @@ export function richMarkdownForTables(markdown: string): string | undefined {
   const normalized = normalizeWrappedFlattenedTables(normalizeListParagraphSpacing(markdown));
   if (!normalized.trim() || !hasGfmTable(normalized)) return undefined;
   if (!hasBalancedFences(normalized)) return undefined;
-  const rich = escapeRichMarkdown(protectPseudoTables(normalized));
+  const rich = escapeRichMarkdown(normalizeRichMathDelimiters(protectPseudoTables(normalized)));
   if (Array.from(rich).length > TELEGRAM_RICH_TEXT_LIMIT) return undefined;
   return rich;
 }
