@@ -190,3 +190,18 @@ describe("native rich markdown for complete responses", () => {
     expect(richMarkdownForResponse("x".repeat(TELEGRAM_RICH_TEXT_LIMIT + 1))).toBeUndefined();
   });
 });
+
+describe("rich delivery content preservation", () => {
+  it("keeps nested lists, links and code fences in native payload", () => {
+    const source = ["## Tools", "- **First**", "  - nested", "- [Docs](https://example.org)", "", "```ts", "const value = 2;", "```"].join("\n");
+    const rich = richMarkdownForResponse(source);
+    expect(rich).toContain("nested");
+    expect(rich).toContain("https://example.org");
+    expect(rich).toContain("const value = 2;");
+  });
+  it("preserves literal comparison operators without exposing HTML tags", () => {
+    const rich = richMarkdownForResponse("When a < b && b > c, show results.");
+    expect(rich).toContain("&lt;");
+    expect(rich).toContain("&amp;&amp;");
+  });
+});
