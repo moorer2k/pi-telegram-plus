@@ -634,9 +634,8 @@ describe("createTelegramController media message behavior", () => {
       setActiveChatId: async () => undefined,
       getBotUsername: () => "test-bot",
       telegramCommands: new Map(),
-      // Goal turns are started by pi-goal, so they are streaming without an
-      // entry in this extension's TelegramTurn bookkeeping map.
-      getActiveTurn: () => undefined,
+      // A Telegram-owned continuation may be steered; an unowned one may not.
+      getActiveTurn: (chatId: number) => ({ chatId, queuedAttachments: [] }),
       beginTelegramTurn: (chatId: number) => ({ chatId, queuedAttachments: [] }),
       endTelegramTurn: () => undefined,
     });
@@ -704,7 +703,7 @@ describe("createTelegramController media message behavior", () => {
       setActiveChatId: async () => undefined,
       getBotUsername: () => "test-bot",
       telegramCommands: new Map(),
-      getActiveTurn: () => undefined,
+      getActiveTurn: (chatId: number) => ({ chatId, queuedAttachments: [] }),
       beginTelegramTurn: (chatId: number) => ({ chatId, queuedAttachments: [] }),
       endTelegramTurn: () => undefined,
     });
