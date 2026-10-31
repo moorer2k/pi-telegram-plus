@@ -535,7 +535,7 @@ describe("Telegram message reactions", () => {
     const { transport } = makeTransport();
     await expect(transport.setReaction!(0, 1, "👍")).rejects.toThrow(/chat ID/);
     await expect(transport.setReaction!(123, 0, "👍")).rejects.toThrow(/message ID/);
-    await expect(transport.setReaction!(123, 1, "")).rejects.toThrow(/emoji/);
+    await expect(transport.setReaction!(123, 1, "x".repeat(9))).rejects.toThrow(/emoji/);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
