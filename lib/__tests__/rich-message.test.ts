@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { hasGfmTable, normalizeFlattenedTables, normalizeWrappedFlattenedTables, fallbackMalformedPipeTables, markdownToTelegramHtml } from "../markdown.ts";
-import { escapeRichMarkdown, richMarkdownForTables, TELEGRAM_RICH_TEXT_LIMIT } from "../rich-message.ts";
+import { escapeRichMarkdown, richMarkdownForTables, richMarkdownForResponse, TELEGRAM_RICH_TEXT_LIMIT } from "../rich-message.ts";
 
 const TABLE = [
   "| Project | Status | Count |",
@@ -168,5 +168,25 @@ describe("richMarkdownForTables", () => {
     const huge = `${TABLE}\n\n${"x".repeat(TELEGRAM_RICH_TEXT_LIMIT)}`;
     expect(richMarkdownForTables(huge)).toBeUndefined();
     expect(richMarkdownForTables(huge.slice(0, TELEGRAM_RICH_TEXT_LIMIT - 100))).toBeDefined();
+  });
+});
+
+describe("native rich markdown for complete responses", () => {
+  it("keeps bullet lists and prose intact", () => {
+    const source = "Extensions:\n\n- Pigram\n- Qusic\n\nDone.";
+    const rich = richMarkdownForResponse(source);
+    expect(rich).toContain("- Pigram");
+    expect(rich).toContain("- Qusic");
+    expect(rich).toContain("Done.");
+  });
+  it("preserves inline and display LaTeX syntax", () => {
+    const source = String.raw`Inline \\(x^2 + y^2\\) and display \\[\\frac{a}{b}\\].`;
+    const rich = richMarkdownForResponse(source);
+    expect(rich).toContain(String.raw`\\frac{a}{b}`);
+    expect(rich).toContain(String.raw`\\(x^2 + y^2\\)`);
+  });
+  it("fails back to HTML for incomplete fences and oversized replies", () => {
+    expect(richMarkdownForResponse("```ts\nconst x = 1")).toBeUndefined();
+    expect(richMarkdownForResponse("x".repeat(TELEGRAM_RICH_TEXT_LIMIT + 1))).toBeUndefined();
   });
 });
