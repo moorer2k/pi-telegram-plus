@@ -112,7 +112,7 @@ export async function inspectVenomUpdate(): Promise<VenomUpdatePlan> {
   const localSha = await run("git", ["rev-parse", "HEAD"], root);
   const remoteSha = await run("git", ["rev-parse", "FETCH_HEAD"], root);
   const counts = await run("git", ["rev-list", "--left-right", "--count", "HEAD...FETCH_HEAD"], root);
-  const [left, right] = counts.split(/\\s+/).map(Number);
+  const [left, right] = counts.split(/\s+/).map(Number);
   if (!Number.isSafeInteger(left) || !Number.isSafeInteger(right)) {
     throw new Error("Unable to determine local and remote Git history.");
   }
