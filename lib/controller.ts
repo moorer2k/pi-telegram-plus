@@ -1802,8 +1802,8 @@ export function createTelegramController(deps: {
       // the owner. Non-owner mentions use the restricted prompt-only path.
       if (isGroup && !addressed) return;
       if (isGroup && policy === "owner-mentions" && !ownerAuthorized && !recognized) return;
-      // Isolation is not enabled merely by selecting a config flag. The host
-      // must provide a separate session factory and routing integration.
+      // Until the host can create and route genuinely independent Pi sessions,
+      // fail closed for every chat and topic rather than leak into the owner session.
       if (deps.getConfig?.().sessionIsolation === "per-chat") {
         await deps.transport.sendText(
           chatId,
