@@ -15,9 +15,12 @@ describe("Venom typed Rich document builder", () => {
     expect(empty).toContain("## SYMBIOTE ACTIVITY");
     expect(empty).toContain("<summary>Earlier traces</summary>");
     expect(live).toContain("◈ EXEC · RUNNING");
-    expect(live).toContain("`git status`");
+    expect(live).toContain("◈ EXEC · RUNNING `git status`");
+    expect(live).not.toContain("**◈ EXEC · RUNNING**");
+    expect(live).not.toContain("◈ EXEC · RUNNING\\n\\n`git status`");
     expect((empty.match(/TRACE · IDLE/g) ?? []).length).toBe(3);
     expect((live.match(/TRACE · IDLE/g) ?? []).length).toBe(2);
+    expect(live).toContain("◈ TRACE · IDLE `awaiting operation`");
   });
   it("preserves intent while dropping URL queries and repeated tool prefixes", () => {
     expect(shortenVenomCommand("bash: curl https://example.com/weather?secret=value"))
