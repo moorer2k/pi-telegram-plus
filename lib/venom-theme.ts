@@ -414,8 +414,8 @@ export function formatVenomRichLivePanel(
     const duration = op.state !== "running" && op.finishedAt !== undefined
       ? " " + (Math.max(0, op.finishedAt - op.startedAt) / 1000).toFixed(1) + "s" : "";
     const state = options?.showOperationStates === false ? "" : " · " + op.state.toLowerCase() + duration;
-    const raw = (op.detail || op.tool).replace(/^(?:bash|terminal|exec):\\s*/i, "");
-    const detail = venomRichShort(raw, venomThemeNumber(options?.commandLength, 72, 24, 240));
+    const raw = (op.detail || op.tool).replace(/^(?:bash|terminal|exec):\s*/i, "");
+    const detail = venomRichShort(raw, Math.min(venomThemeNumber(options?.commandLength, 24, 12, 240), 24));
     const safeCode = detail.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replaceAll("`", "'");
     // Single-operation mode uses a stable two-line status/detail layout.
     if (count === 1) {
