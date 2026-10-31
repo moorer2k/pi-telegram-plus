@@ -22,7 +22,10 @@ export class IsolatedSessionRegistry<T> {
   constructor(
     private readonly create: (target: SessionTarget) => Promise<T>,
     private readonly disposeSession: (session: T) => Promise<void>,
-  ) {}
+    private readonly maxSessions = 32,
+  ) {
+    if (!Number.isSafeInteger(maxSessions) || maxSessions < 1) throw new Error("Invalid session limit");
+  }
 
   static key(target: SessionTarget): string {
     if (!Number.isSafeInteger(target.chatId)) throw new Error("Invalid Telegram chat ID");
@@ -54,6 +57,7 @@ export class IsolatedSessionRegistry<T> {
     const key = IsolatedSessionRegistry.key(target);
     let entry = this.entries.get(key);
     if (!entry) {
+      if (this.entries.size >= this.maxSessions) throw new Error("Isolated session limit reached");
       const ownTarget = { ...target };
       entry = {
         target: ownTarget,
