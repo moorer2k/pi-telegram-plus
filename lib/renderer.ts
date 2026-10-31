@@ -9,7 +9,7 @@ import type { TelegramConfig, TelegramRenderLevel, TelegramTransport, TelegramTu
 import type { SecretStore } from "./tui/secrets.ts";
 import { RENDER_LEVELS } from "./types.ts";
 import { log } from "./logger.ts";
-import { venomActivity, venomThemeFrame, venomThemeLabel, venomThemeNumber, venomThemeText, formatVenomContextUsage, formatVenomFooter, VENOM_DEFAULTS, venomSectionTitle, venomTransmissionTitle, venomCompletionLabel, formatVenomLiveOperations, venomToolTag, type VenomLiveOperation, type VenomActivity } from "./venom-theme.ts";
+import { venomActivity, venomThemeFrame, venomThemeLabel, venomThemeNumber, venomThemeText, formatVenomContextUsage, formatHuntDuration, VENOM_DEFAULTS, venomSectionTitle, venomTransmissionTitle, venomCompletionLabel, formatVenomLiveOperations, venomToolTag, type VenomLiveOperation, type VenomActivity } from "./venom-theme.ts";
 
 const renderLog = log.child("renderer");
 
@@ -305,12 +305,18 @@ export function registerTelegramRenderer(
     const style = theme?.preset;
     const status = venomThemeLabel(progress.activity, theme);
     const activity = formatVenomLiveOperations(progress.operations, escapeHtml, theme);
-    // The individual trace rows now own operation lifecycle state. Count it only
-    // once, in the trace, rather than duplicating totals in the footer.
-    const footerOptions = { ...theme, showOperations: false };
-    const footer = formatVenomFooter(progress.count, Date.now() - progress.started, context, model, footerOptions);
+    // Telemetry has two reserved lines in normal mode so long model names
+    // cannot make the bubble suddenly wrap or change height.
+    const telemetryModel = (model || "model unavailable").slice(0, 34);
+    const telemetryMetrics = [
+      context ? "CTX " + context.slice(0, 23) : "CTX --",
+      theme?.showElapsed === false ? "" : formatHuntDuration(Date.now() - progress.started),
+    ].filter(Boolean).join(" · ");
+    const footer = theme?.footerDensity === "compact"
+      ? "<code>" + escapeHtml((telemetryModel + " · " + telemetryMetrics).slice(0, 55)) + "</code>"
+      : "<code>" + escapeHtml(telemetryModel) + "</code>\n<code>" + escapeHtml(telemetryMetrics) + "</code>";
     const objective = progress.latest
-      ? progress.latest.replace(/\s+/g, " ").trim().slice(0, 48)
+      ? progress.latest.replace(/\s+/g, " ").trim().slice(0, 38)
       : "Standing by for next signal";
     const role = style === "classified" ? "[ CLASSIFIED // SYMBIOTE NETWORK ]\n" :
       style === "predator-terminal" ? "[ PREDATOR TERMINAL ]\n" :
@@ -328,7 +334,7 @@ export function registerTelegramRenderer(
       (theme?.showObjective === false ? "" :
         "\n\n<b>" + escapeHtml(venomTransmissionTitle(theme)) + "</b>\n" +
         "<i>" + escapeHtml(objective) + "</i>") +
-      (footer ? "\n\n<code>" + escapeHtml(footer.slice(0, 120)) + "</code>" : "");
+      (footer ? "\n\n" + footer : "");
     try {
       // Keep edits serialized; an older animation frame must never overwrite
       // a newer tool event or the completed answer.
