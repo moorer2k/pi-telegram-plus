@@ -719,7 +719,7 @@ describe("createTelegramController media message behavior", () => {
   it("reports asynchronous prompt failures back to Telegram", async () => {
     const session = {
       prompt: vi.fn(async () => { throw new Error("prompt failed"); }),
-      isStreaming: true,
+      isStreaming: false,
       extensionRunner: {
         getUIContext: () => undefined,
         setUIContext: () => undefined,
