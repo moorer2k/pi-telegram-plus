@@ -33,9 +33,21 @@ export function escapeRichMarkdown(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;");
 }
 
-/** True when every code fence is closed (an unterminated fence swallows the rest). */
+/** Match fenced blocks by delimiter and minimum opening width. */
 function hasBalancedFences(markdown: string): boolean {
-  return (markdown.match(/^\s*(?:`{3,}|~{3,})/gm) ?? []).length % 2 === 0;
+  let fence: { marker: string; width: number } | undefined;
+  for (const line of markdown.split("\n")) {
+    const match = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+    if (!match) continue;
+    const marker = match[1][0];
+    if (!fence) {
+      if (marker === "`" && match[2].includes("`")) continue;
+      fence = { marker, width: match[1].length };
+    } else if (marker === fence.marker && match[1].length >= fence.width && !match[2].trim()) {
+      fence = undefined;
+    }
+  }
+  return !fence;
 }
 
 /**
@@ -61,13 +73,17 @@ export function richMarkdownForTables(markdown: string): string | undefined {
  * fenced code or attempt a rich edit with unbalanced fences.
  * Unsupported API servers use the existing HTML fallback.
  */
-/** Streaming previews must not expose unfinished Markdown constructs. */
+/** Streaming drafts expose only completed lines with balanced code fences. */
 export function richMarkdownForDraft(markdown: string): string | undefined {
   const lines = markdown.split("\n");
+  // Avoid publishing an unfinished final line (links, inline code, tables,
+  // math delimiters and fence openers can all be mid-token).
+  if (lines.length > 1 && lines[lines.length - 1] !== "") lines.pop();
   let safe = lines.join("\n");
-  // A trailing partial code fence or unfinished inline code is not renderable.
-  if (!/(?:\n|^)$/.test(safe) && /(?:^|\n)\s*(?:`{1,2}|`{3,}|~{3,})[^\n]*$/.test(safe)) {
-    safe = lines.slice(0, -1).join("\n");
+  while (safe && !hasBalancedFences(safe)) {
+    const at = safe.lastIndexOf("\n");
+    if (at < 0) return undefined;
+    safe = safe.slice(0, at);
   }
   if (!safe.trim()) return undefined;
   return richMarkdownForResponse(safe);
