@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { hasGfmTable, normalizeFlattenedTables, normalizeWrappedFlattenedTables, fallbackMalformedPipeTables, markdownToTelegramHtml } from "../markdown.ts";
-import { escapeRichMarkdown, richMarkdownForTables, richMarkdownForResponse, TELEGRAM_RICH_TEXT_LIMIT } from "../rich-message.ts";
+import { escapeRichMarkdown, richMarkdownForTables, richMarkdownForDraft, richMarkdownForResponse, TELEGRAM_RICH_TEXT_LIMIT } from "../rich-message.ts";
 
 const TABLE = [
   "| Project | Status | Count |",
@@ -203,5 +203,20 @@ describe("rich delivery content preservation", () => {
     const rich = richMarkdownForResponse("When a < b && b > c, show results.");
     expect(rich).toContain("&lt;");
     expect(rich).toContain("&amp;&amp;");
+  });
+});
+
+describe("streaming draft Markdown recovery", () => {
+  it("does not publish incomplete trailing lines", () => {
+    expect(richMarkdownForDraft("Complete paragraph.\n[unfinished](")).toBe("Complete paragraph.");
+  });
+  it("does not publish unterminated code fences", () => {
+    expect(richMarkdownForDraft("Intro\n\n```ts\nconst x = 1;")).toBeUndefined();
+  });
+  it("preserves completed fenced code", () => {
+    expect(richMarkdownForDraft("Intro\n\n```ts\nconst x = 1;\n```\n")).toContain("const x = 1;");
+  });
+  it("preserves LaTeX source in complete responses", () => {
+    expect(richMarkdownForResponse(String.raw`\\(x^2 + y^2\\) and $$\\frac{1}{2}$$`)).toContain(String.raw`\\frac{1}{2}`);
   });
 });
