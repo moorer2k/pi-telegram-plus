@@ -286,6 +286,7 @@ describe("Venom Lethal Protector presentation", () => {
     const code = lines.find(line => line.startsWith("`curl"));
     expect(code).toBeDefined();
     expect(code!.length).toBeLessThanOrEqual(26);
+    expect(code).not.toContain("\\?");
   });
 
   it("reports only actual operation states", () => {
