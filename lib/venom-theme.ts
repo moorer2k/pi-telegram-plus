@@ -334,6 +334,59 @@ export function formatVenomActivityHistory(
     (omitted ? omitted + " older entries omitted\n" : "") + history + "</blockquote>";
 }
 
+/** Live progress is an event model, not a sequence of unstructured console lines. */
+export type VenomLiveOperation = {
+  id: string;
+  tag: string;
+  tool: string;
+  detail: string;
+  state: "running" | "done" | "failed";
+  startedAt: number;
+  finishedAt?: number;
+};
+
+export function formatVenomLiveOperations(
+  operations: readonly VenomLiveOperation[],
+  escape: (text: string) => string,
+  options?: VenomThemeOptions,
+): string {
+  const count = venomThemeNumber(options?.visibleOperations, 3, 1, 12);
+  const fixed = options?.fixedOperationRows !== false;
+  const recent = operations.slice(-count);
+  const older = operations.slice(0, -count);
+  const truncate = (value: string, max: number): string => {
+    const clean = value.replace(/\s+/g, " ").trim();
+    return clean.length > max ? clean.slice(0, max - 1) + "…" : clean;
+  };
+  const statusText = (op: VenomLiveOperation): string => {
+    if (options?.showOperationStates === false) return "";
+    if (op.state === "running") return " · ACTIVE";
+    if (op.state === "failed") return " · FAILED";
+    const elapsed = op.finishedAt === undefined ? "" : " " + ((Math.max(0, op.finishedAt - op.startedAt)) / 1000).toFixed(1) + "s";
+    return " · DONE" + elapsed;
+  };
+  const row = (op: VenomLiveOperation): string => {
+    const label = truncate(op.tag.toUpperCase().replace(/[^A-Z0-9_-]/g, ""), 10) || "TRACE";
+    const detail = truncate(op.detail || op.tool, fixed ? 38 : options?.operationDetail === "full" ? 96 : 60);
+    return "<code>" + escape("› " + label + statusText(op)) + "</code>\n" +
+      "<code>" + escape("  " + detail) + "</code>";
+  };
+  // Two fixed lines per slot: a lifecycle header and a command/target excerpt.
+  // This is the same geometry whether no tool has started or all slots are busy.
+  const blanks = fixed ? Array.from({ length: count - recent.length }, () =>
+    "<code>› TRACE · IDLE</code>\n<code>  awaiting operation</code>") : [];
+  const rows = [...recent.map(row), ...blanks];
+  const visible = rows.length ? rows.join("\n") : "<i>Awaiting target</i>";
+  if (options?.collapseOperations === "off" || older.length === 0) return visible;
+  const history = older.slice(-16).map(op =>
+    escape(truncate(op.tag + " " + op.state + " " + op.detail, 84))).join("\n");
+  const omitted = Math.max(0, older.length - 16);
+  return visible + "\n<blockquote expandable>" +
+    escape(older.length + " EARLIER TRACES · tap to expand") + "\n" +
+    (omitted ? escape(omitted + " older traces omitted") + "\n" : "") +
+    history + "</blockquote>";
+}
+
 export function formatVenomOperationState(completed: number, running: number, failed: number): string {
   return [completed + " done", running + " running", failed + " failed"].join(" · ");
 }

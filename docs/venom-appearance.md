@@ -121,3 +121,15 @@ Operation totals no longer appear twice: when operation-state counts are display
 Recommended menu configuration: `/tg → Config → Venom appearance`, choose `Symbiote HUD`, set `Console entries=3`, `Collapse history=expandable`, `Fixed operation rows=on`, `Show tool states=on`, `Footer density=compact`.
 
 Note: Telegram controls message bubble width and font sizing. This redesign minimizes reflows but the Bot API cannot guarantee identical pixel dimensions after every edit.
+
+## Venom live trace HUD (structured lifecycle mode)
+
+Live progress (`Tool: progress`) now renders **tool events**, not an append-only list of console strings. Each tool call is tracked by `toolCallId` through `tool_execution_start` and `tool_execution_end`; visible trace slots show a Venom operation tag, running/done/failed state, completed duration when known, and a bounded one-line command or target excerpt.
+
+The **six-cell symbiote progress pulse is retained** and occupies its own line. The pulse is an animation, **not a percent-complete meter**. Status headings, pulse, trace section, optional objective, and telemetry never share a line. Fixed rows reserve two display lines per operation (`Console entries`, default 3); inactive slots say `TRACE · IDLE` / `awaiting operation`. New tools replace reserved slots rather than appending growing blocks. All six presets retain their own section titles and activity labels.
+
+Older trace entries appear below current slots in a native Telegram **expandable blockquote** once more than X tools have run. Collapse history defaults to expandable for new settings; explicit `off` hides older entries. Telegram client compatibility determines whether the native quote can be expanded. The full history is capped to the most recent 16 entries, and total tracked events are bounded to 120.
+
+Tool state is shown on the individual tool rows; the footer deliberately omits the duplicate operation count. Telemetry reserves a model row and a context/time row (`Footer density: normal`), or a bounded compact row if requested. `Show tool states`, `Show objective`, `Show pulse`, `Fixed operation rows`, and existing preset options remain configurable.
+
+This only applies to live progress. The final assistant answer continues to be sent as the actual response, rather than retaining a permanently animated placeholder. Telegram controls the chat bubble’s exact width and text layout, so completely invariant pixel dimensions across every client cannot be guaranteed.
