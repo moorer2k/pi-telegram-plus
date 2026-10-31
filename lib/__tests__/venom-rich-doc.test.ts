@@ -1,3 +1,4 @@
+import { formatVenomRichLivePanel } from "../venom-theme.ts";
 import { describe, expect, it } from "vitest";
 import { buildVenomRichPanel, renderVenomBlocks, shortenVenomCommand } from "../venom-rich-doc.ts";
 
@@ -46,5 +47,16 @@ describe("Venom typed Rich document builder", () => {
     expect(rich).toContain("## NEURAL LINK");
     expect(rich).not.toContain("━━━━━━━━");
     expect(rich.length).toBeLessThan(6501);
+  });
+});
+
+describe("Venom live renderer", () => {
+  it("renders active operations as compact bullets rather than bold tool labels", () => {
+    const result = formatVenomRichLivePanel([{ id: "a", tag: "RECON", tool: "bash", detail: "bash: git status", state: "done", startedAt: 0, finishedAt: 100 }], { visibleOperations: 2 }, meta);
+    expect(result).toContain("- `git status` · done 0.1s");
+    expect(result).toContain("- `awaiting operation` · idle");
+    expect(result).not.toContain("**◆ RECON");
+    expect(result).not.toContain("**◈ TRACE");
+    expect(result).toContain("<summary>Earlier traces</summary>");
   });
 });
