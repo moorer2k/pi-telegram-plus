@@ -1026,10 +1026,27 @@ export function createTelegramController(deps: {
       return;
     }
 
-    bumpInterruptGeneration(targetKey(chatId, messageThreadId));
+    const key = targetKey(chatId, messageThreadId);
+    const pending = pendingPromptCounts.get(key) ?? 0;
+    const ownedTurn = deps.getActiveTurn(chatId, messageThreadId);
+    // Pi's abort() is session-global. A chat without the active turn must
+    // never terminate work initiated by a different Telegram chat/topic or
+    // by the local TUI. It may only discard its own queued instructions.
+    bumpInterruptGeneration(key);
+    if (!ownedTurn) {
+      ctrlLog.info("telegram stop cleared own queue without global abort", { chatId, messageThreadId, pending });
+      await deps.transport.sendText(chatId,
+        pending > 0 ? `Cleared ${pending} queued message(s). No turn owned by this chat/topic was interrupted.` : "No active turn owned by this chat/topic to stop.",
+        messageThreadId, sourceMessageId);
+      return;
+    }
     await deps.transport.sendText(chatId, "⏹️ Interrupt requested.", messageThreadId, sourceMessageId);
-    const abortResult = (session as any).abort?.();
-    void abortResult?.catch?.(() => undefined);
+    try {
+      await Promise.resolve((session as any).abort?.());
+    } catch (err) {
+      ctrlLog.error("telegram stop abort failed", { chatId, messageThreadId, err });
+      await deps.transport.sendText(chatId, "Could not abort the active turn. Check the Telegram error log.", messageThreadId, sourceMessageId);
+    }
   };
 
   const reportPromptFailure = async (label: string, chatId: number, messageThreadId: number | undefined, sourceMessageId: number | undefined, err: unknown): Promise<void> => {
