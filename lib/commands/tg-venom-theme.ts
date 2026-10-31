@@ -47,7 +47,7 @@ export async function configVenomThemeFlow(ui: MenuUi, deps: TgConfigDeps): Prom
       "Preview characters: " + venomThemeNumber(theme.previewLength, 500, 100, 1500),
       "Show operation count: " + (theme.showOperations === false ? "off" : "on"),
       "Show hunting time: " + (theme.showElapsed === false ? "off" : "on"),
-      "Collapse history: " + (theme.collapseOperations ?? "off"),
+      "Collapse history: " + (theme.collapseOperations ?? "expandable"),
       "Fixed operation rows: " + (theme.fixedOperationRows === false ? "off" : "on"),
       "Tool details: " + (theme.operationDetail ?? "compact"),
       "Show tool states: " + (theme.showOperationStates === false ? "off" : "on"),
