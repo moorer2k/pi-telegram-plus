@@ -681,6 +681,12 @@ ${partial}`);
       // renders it as a native bordered table. Non-qualifying answers — and any
       // server without Rich Message support — keep the HTML path untouched.
       const richMarkdown = richMarkdownForTables(body);
+      renderLog.info("final Telegram formatting", {
+        rawPipes: (body.match(/\\|/g) ?? []).length,
+        separatorPresent: /\\|\\s*:?-{2,}:?\\s*\\|/.test(body),
+        richTableSelected: !!richMarkdown,
+        rawLength: body.length,
+      });
       await sendToTurn(markdownToTelegramHtml(body), { final: true, richMarkdown });
     }
 
@@ -730,7 +736,14 @@ ${partial}`);
       const final = progress.messages.join("\n\n");
       progress.target = "";
       if (final) {
-        await sendToTurn(markdownToTelegramHtml(final), { final: true, richMarkdown: richMarkdownForTables(final) });
+        const richMarkdown = richMarkdownForTables(final);
+        renderLog.info("final Telegram formatting", {
+          rawPipes: (final.match(/\\|/g) ?? []).length,
+          separatorPresent: /\\|\\s*:?-{2,}:?\\s*\\|/.test(final),
+          richTableSelected: !!richMarkdown,
+          rawLength: final.length,
+        });
+        await sendToTurn(markdownToTelegramHtml(final), { final: true, richMarkdown });
       } else if (turn.replaceMessageId !== undefined) {
         const theme = deps.getConfig().venomTheme;
         await deps.transport.editText(turn.chatId, turn.replaceMessageId, "<b>VENOM // LETHAL PROTECTOR</b>\n" + escapeHtml(venomCompletionLabel(false, theme)));
