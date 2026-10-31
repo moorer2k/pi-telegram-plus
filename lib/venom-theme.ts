@@ -457,6 +457,21 @@ export function formatVenomRichLivePanel(
     "\n\n" + escaped(venomRichShort(meta.metrics, VENOM_RICH_META_WIDTH));
 }
 
+
+/** First progress message uses the same Rich geometry as subsequent edits. */
+export function formatVenomRichInitialPanel(options?: VenomThemeOptions): string {
+  return formatVenomRichLivePanel([], options, {
+    title: venomThemeText(options?.title, VENOM_DEFAULTS.title),
+    status: venomThemeLabel("awakening", options),
+    pulse: "▱▱▱▱▱▱",
+    section: venomSectionTitle(options),
+    transmission: venomTransmissionTitle(options),
+    objective: "Standing by for next signal",
+    model: "model unavailable",
+    metrics: "CTX --",
+  });
+}
+
 export function formatVenomOperationState(completed: number, running: number, failed: number): string {
   return [completed + " done", running + " running", failed + " failed"].join(" · ");
 }
