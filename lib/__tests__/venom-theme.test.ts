@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { VENOM_PULSE_FRAMES, venomActivity, venomPulse, venomStatusLabel, formatHuntDuration, formatConsoleActivity, formatVenomConsole, venomThemeFrame, venomThemeLabel, venomThemeText, venomThemeNumber, formatVenomContextUsage, formatVenomFooter, venomPreset, VENOM_PRESETS, venomSectionTitle, venomTransmissionTitle, venomToolLine, venomToolTag, formatVenomTelemetry, formatVenomTerminalBlock, formatVenomActivityHistory, formatVenomOperationState, formatVenomLiveOperations, formatVenomRichLivePanel, formatVenomRichInitialPanel, VENOM_RICH_WIDTH_ANCHOR, VENOM_PULSE_WIDTH, isVenomHud, venomCompletionLabel } from "../venom-theme.ts";
+import { VENOM_PULSE_FRAMES, venomActivity, venomPulse, venomStatusLabel, formatHuntDuration, formatConsoleActivity, formatVenomConsole, venomThemeFrame, venomThemeLabel, venomThemeText, venomThemeNumber, formatVenomContextUsage, formatVenomFooter, venomPreset, VENOM_PRESETS, venomSectionTitle, venomTransmissionTitle, venomToolLine, venomToolTag, formatVenomTelemetry, formatVenomTerminalBlock, formatVenomActivityHistory, formatVenomOperationState, formatVenomLiveOperations, formatVenomRichLivePanel, formatVenomRichInitialPanel, VENOM_PULSE_WIDTH, isVenomHud, venomCompletionLabel } from "../venom-theme.ts";
 
 describe("Venom Lethal Protector presentation", () => {
   it("cycles through symbiote pulse frames without reporting fictional completion", () => {
@@ -259,14 +259,29 @@ describe("Venom Lethal Protector presentation", () => {
     for (const count of [0, 1, 3, 4, 25]) {
       const rich = formatVenomRichLivePanel(Array.from({ length: count }, (_, i) => op(i)),
         { visibleOperations: 3, collapseOperations: "expandable" }, meta);
-      expect(rich).toContain(VENOM_RICH_WIDTH_ANCHOR);
+      expect(rich).not.toContain("━━━━━━━━");
       expect(rich).toContain("<summary>Earlier traces</summary>");
       expect(rich).not.toContain("a".repeat(40));
     }
     const initial = formatVenomRichInitialPanel({ visibleOperations: 3 });
-    expect(initial).toContain(VENOM_RICH_WIDTH_ANCHOR);
+    expect(initial).not.toContain("━━━━━━━━");
     expect(initial).toContain("<summary>Earlier traces</summary>");
     expect(initial).toContain("▱".repeat(12));
+  });
+
+  it("renders semantic shortened commands without URL query strings", () => {
+    const rich = formatVenomRichLivePanel([{ id: "1", tag: "EXEC", tool: "bash",
+      detail: 'bash: curl "https://example.com/weather?api_key=secret"',
+      state: "running", startedAt: 0 }], { visibleOperations: 1 }, {
+      title: "VENOM", status: "HUNT ACTIVE", pulse: "▰".repeat(6) + "▱".repeat(6),
+      section: "SYMBIOTE ACTIVITY", transmission: "NEURAL LINK",
+      objective: "Analyzing", model: "qwen", metrics: "CTX 10%",
+    });
+    expect(rich).toContain("curl");
+    expect(rich).not.toContain("api_key=secret");
+    expect(rich).not.toContain("━━━━━━━━");
+    expect(rich).toContain("<details>");
+    expect(rich).toContain("## SYMBIOTE ACTIVITY");
   });
 
   it("reports only actual operation states", () => {
