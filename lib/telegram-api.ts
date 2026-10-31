@@ -327,7 +327,7 @@ export function createTelegramTransport(
     try {
       return await callApi<TelegramSentMessage>("sendRichMessage", {
         chat_id: chatId,
-        rich_message: { markdown },
+        rich_message: { markdown, skip_entity_detection: true },
         link_preview_options: { is_disabled: cfg().linkPreviews !== true },
         ...messageTargetFields(messageThreadId, replyToMessageId),
       }, undefined, lease, delivery);
@@ -410,7 +410,7 @@ export function createTelegramTransport(
           await callApi("editMessageText", {
             chat_id: chatId,
             message_id: messageId,
-            rich_message: { markdown: richMarkdown },
+            rich_message: { markdown: richMarkdown, skip_entity_detection: true },
             link_preview_options: { is_disabled: true },
           }, undefined, lease);
           return;

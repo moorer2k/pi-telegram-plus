@@ -454,8 +454,6 @@ export function formatVenomRichLivePanel(
     "\n\n" + escaped(venomRichShort(meta.metrics, VENOM_RICH_META_WIDTH));
 }
 
-
-/** First progress message uses the same Rich geometry as subsequent edits. */
 export function formatVenomRichInitialPanel(options?: VenomThemeOptions): string {
   return formatVenomRichLivePanel([], options, {
     title: venomThemeText(options?.title, VENOM_DEFAULTS.title),
