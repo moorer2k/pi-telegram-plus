@@ -323,7 +323,11 @@ export function fallbackMalformedPipeTables(markdown: string): string {
     let sepEnd = sep;
     while (sepEnd < cells.length && isSep(cells[sepEnd])) sepEnd++;
     const width = sepEnd - sep;
-    if (width < 2 || width > 6 || sep !== width || cells.length <= sepEnd) { out.push(line); continue; }
+    if (width < 2 || width > 6 || sep !== width || cells.length <= sepEnd) {
+      const visible = cells.filter(cell => !isSep(cell));
+      out.push([...(prefix ? [prefix, ""] : []), ...visible.map(value => "- " + value)].join("\n"));
+      continue;
+    }
     const headers = cells.slice(0, width);
     const values = cells.slice(sepEnd);
     if (!headers.every(Boolean) || !values.length) { out.push(line); continue; }
