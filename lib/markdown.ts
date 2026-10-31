@@ -615,7 +615,8 @@ const renderer = {
           return prefix + line;
         }).join("\n");
       });
-      // Match paragraph spacing: leave a blank line after the list.\n      return lines.join("\n") + "\n\n";
+      // Match paragraph spacing: leave a blank line after the list.
+      return lines.join("\n") + "\n\n";
     } finally {
       _listDepth--;
     }
