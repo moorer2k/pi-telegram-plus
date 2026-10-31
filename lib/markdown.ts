@@ -696,7 +696,28 @@ export function markdownToTelegramHtml(markdown: string): string {
   // marked renders them as <pre><code> — preserving column alignment in
   // Telegram's monospace font instead of mangling pipes in a proportional-font
   // paragraph. Real markdown tables (with a separator) are left for marked.
-  const protected_ = protectPseudoTables(fallbackMalformedPipeTables(normalizeWrappedFlattenedTables(normalizeListParagraphSpacing(markdown))));
+  // Keep genuine GFM tables out of the malformed-table recovery pipeline.
+  // Recovery is intended for model-generated broken tables, not valid ones;
+  // processing valid headers/separators independently can destroy their shape.
+  const sourceLines = normalizeListParagraphSpacing(markdown).split("\n");
+  const validTableLines = markRealTableLines(sourceLines);
+  const prepared: string[] = [];
+  let segment: string[] = [];
+  const flushSegment = () => {
+    if (!segment.length) return;
+    prepared.push(protectPseudoTables(fallbackMalformedPipeTables(normalizeWrappedFlattenedTables(segment.join("\n")))));
+    segment = [];
+  };
+  for (let i = 0; i < sourceLines.length; i++) {
+    if (validTableLines[i]) {
+      flushSegment();
+      prepared.push(sourceLines[i]);
+    } else {
+      segment.push(sourceLines[i]);
+    }
+  }
+  flushSegment();
+  const protected_ = prepared.join("\n");
   // Explicitly enable GFM for each render. Other extensions may configure
   // the shared marked singleton and disable table tokenization globally.
   return (marked.parse(protected_, { async: false, gfm: true }) as string).replace(/\n+$/, "");
