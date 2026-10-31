@@ -30,7 +30,7 @@ export function renderVenomBlocks(blocks: readonly VenomBlock[]): string {
   return blocks.map(block => {
     if (block.kind === "heading") return "## " + escapeRich(block.value);
     if (block.kind === "code") return code(block.value);
-    if (block.kind === "operation") return escapeRich(block.status) + " " + code(block.command);
+    if (block.kind === "operation") return "- " + code(block.command) + " · " + escapeRich(block.status);
     if (block.kind === "text") {
       const value = escapeRich(block.value);
       return block.bold ? "**" + value + "**" : value;
@@ -57,15 +57,13 @@ export function buildVenomRichPanel(ops: readonly VenomLiveOperation[],
   blocks.push({ kind: "heading", value: meta.section });
   const recent = ops.slice(-count);
   for (const op of recent) {
-    const glyph = op.state === "failed" ? "×" : op.state === "done" ? "◆" : "◈";
-    const tag = op.tag.replace(/[^A-Z0-9_-]/gi, "").slice(0, 10).toUpperCase() || "TRACE";
     const elapsed = op.state !== "running" && op.finishedAt !== undefined
       ? " " + (Math.max(0, op.finishedAt - op.startedAt) / 1000).toFixed(1) + "s" : "";
-    const state = opts?.showOperationStates === false ? "" : " · " + op.state.toUpperCase() + elapsed;
-    blocks.push({ kind: "operation", status: glyph + " " + tag + state, command: shortenVenomCommand(op.detail || op.tool, commandLength) });
+    const state = opts?.showOperationStates === false ? "" : op.state.toLowerCase() + elapsed;
+    blocks.push({ kind: "operation", status: state, command: shortenVenomCommand(op.detail || op.tool, commandLength) });
   }
   if (opts?.fixedOperationRows !== false) for (let i = recent.length; i < count; i++) {
-    blocks.push({ kind: "operation", status: "◈ TRACE · IDLE", command: "awaiting operation" });
+    blocks.push({ kind: "operation", status: "idle", command: "awaiting operation" });
   }
   if (opts?.collapseOperations !== "off") blocks.push({ kind: "details", title: "Earlier traces",
     lines: ops.slice(0, -count).slice(-historyOperations).map(op => op.tag + " · " + op.state + " · " + shortenVenomCommand(op.detail, historyCommandLength)) });
