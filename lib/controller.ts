@@ -1660,7 +1660,7 @@ export function createTelegramController(deps: {
           || message.voice || message.animation || message.sticker) return;
         if (!bridge.isAvailable()) return;
         await submitText(
-          telegramGroupPromptHeader(message.from, recognized) + "\n" + prompt,
+          telegramGroupPromptHeader(message.from, recognized, deps.getConfig?.().allowedUserId) + "\n" + prompt,
           chatId, undefined, messageThreadId, sourceMessageId,
         );
         return;
