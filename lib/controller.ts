@@ -1940,6 +1940,25 @@ export function createTelegramController(deps: {
         }
         return;
       }
+      if (trimmed === "/queue list") {
+        const key = targetKey(chatId, messageThreadId);
+        const pendingIds = pendingSourceMessages.get(key);
+        if (!pendingIds?.size) {
+          await deps.transport.sendText(chatId, "No queued messages with Telegram message IDs in this chat/topic.", messageThreadId, sourceMessageId);
+          return;
+        }
+        // IDs only: never expose message bodies, which can contain secrets.
+        // Bound the output to avoid Telegram's message-length limits.
+        const ids = [...pendingIds].slice(0, 32);
+        const remaining = pendingIds.size - ids.length;
+        const lines = ids.map((id, index) => String(index + 1) + ". #" + id);
+        const suffix = remaining > 0 ? "\n…and " + remaining + " more." : "";
+        await deps.transport.sendText(chatId,
+          "Pending message IDs (oldest first):\n" + lines.join("\n") + suffix +
+          "\nCancel one with /queue cancel <message_id>.",
+          messageThreadId, sourceMessageId);
+        return;
+      }
       if (trimmed === "/queue cancel" || trimmed.startsWith("/queue cancel ")) {
         const key = targetKey(chatId, messageThreadId);
         const argument = trimmed.slice("/queue cancel".length).trim();
