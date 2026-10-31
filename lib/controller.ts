@@ -1125,8 +1125,8 @@ export function createTelegramController(deps: {
         // A main turn (e.g. a goal continuation) started while we waited —
         // behave like the terminal and steer into it instead of holding.
         if (idleFn && !idleFn.call(ctx)) {
-          await session.prompt(text, { source: "interactive", streamingBehavior: "steer" as const });
-          return;
+          // Keep held messages isolated from an unrelated active turn.
+          continue;
         }
         continue;
       }
