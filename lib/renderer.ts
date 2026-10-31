@@ -682,8 +682,8 @@ ${partial}`);
       // server without Rich Message support — keep the HTML path untouched.
       const richMarkdown = richMarkdownForTables(body);
       renderLog.info("final Telegram formatting", {
-        rawPipes: (body.match(/\\|/g) ?? []).length,
-        separatorPresent: /\\|\\s*:?-{2,}:?\\s*\\|/.test(body),
+        rawPipes: (body.match(/\|/g) ?? []).length,
+        separatorPresent: /\|\s*:?-{2,}:?\s*\|/.test(body),
         richTableSelected: !!richMarkdown,
         rawLength: body.length,
       });
@@ -738,8 +738,8 @@ ${partial}`);
       if (final) {
         const richMarkdown = richMarkdownForTables(final);
         renderLog.info("final Telegram formatting", {
-          rawPipes: (final.match(/\\|/g) ?? []).length,
-          separatorPresent: /\\|\\s*:?-{2,}:?\\s*\\|/.test(final),
+          rawPipes: (final.match(/\|/g) ?? []).length,
+          separatorPresent: /\|\s*:?-{2,}:?\s*\|/.test(final),
           richTableSelected: !!richMarkdown,
           rawLength: final.length,
         });
