@@ -293,76 +293,45 @@ export function registerTelegramRenderer(
     if (progress.editing || (!force && Date.now() - progress.lastEdit < editGap - 200)) return;
     progress.editing = true;
     progress.lastEdit = Date.now();
-    const entries = formatVenomConsole(progress.lines, escapeHtml, theme);
-    const previewLength = venomThemeNumber(theme?.previewLength, 500, 100, 1500);
-    const preview = progress.latest ? "\n\n<b>" + escapeHtml(venomTransmissionTitle(theme)) + "</b>\n" + escapeHtml(progress.latest.slice(0, previewLength)) : "";
-    const frame = venomThemeFrame(Math.floor(Math.max(0, Date.now() - progress.started) / editGap), theme);
-    // Live metrics may be absent on some Pi/OMP host versions.
     const session = deps.getSession?.();
     let contextUsage: unknown;
     try { contextUsage = session?.getContextUsage?.(); }
     catch (err) { renderLog.debug("context usage unavailable", { err }); }
     const context = formatVenomContextUsage(contextUsage, session?.model?.contextWindow);
-    const modelName = session?.model?.id;
+    const model = session?.model?.id;
+    const frame = venomThemeFrame(Math.floor(Math.max(0, Date.now() - progress.started) / editGap), theme);
     const header = venomThemeText(theme?.title, VENOM_DEFAULTS.title);
     const section = venomSectionTitle(theme);
-    const footer = formatVenomTelemetry(progress.count, Date.now() - progress.started, context, modelName, theme);
-    const isBlacksite = theme?.preset === "blacksite";
-    const isHud = isVenomHud(theme?.preset);
-    const hudHistory = formatVenomActivityHistory(progress.lines, escapeHtml, theme);
-    const currentObjective = progress.latest?.trim().slice(0, venomThemeNumber(theme?.previewLength, 500, 100, 1500));
-    const hudActivity = (theme?.showOperationStates === false ? "" :
-      "<i>" + escapeHtml(formatVenomOperationState(progress.completed, progress.running.size, progress.failed)) + "</i>\n") +
-      hudHistory;
-    const hudTelemetry = theme?.footerDensity === "compact"
-      ? formatVenomFooter(progress.count, Date.now() - progress.started, context, modelName, theme)
-      : footer;
-    const hudIntro = theme?.preset === "predator-terminal"
-      ? "<b>" + escapeHtml(header) + "</b>\n" + escapeHtml(venomThemeLabel(progress.activity, theme))
-      : theme?.preset === "classified"
-        ? "<b>[ CLASSIFIED // SYMBIOTE NETWORK ]</b>\n<b>" + escapeHtml(header) + "</b>\n" +
-          escapeHtml(venomThemeLabel(progress.activity, theme))
-        : "<b>" + frame.eye + " " + escapeHtml(header) + "</b>\n<b>" +
-          escapeHtml(venomThemeLabel(progress.activity, theme)) + "</b>";
-
-    // Telegram HTML supports native preformatted blocks and blockquotes.
-    // Only apply the richer layout to Blacksite; keep other presets unchanged.
-    const terminal = isBlacksite
-      ? formatVenomCompactOperations(progress.lines, escapeHtml, theme)
-      : entries;
-    const transmission = progress.latest
-      ? isBlacksite
-        ? "\n\n<b>" + escapeHtml(venomTransmissionTitle(theme)) + "</b>\n" +
-          (progress.latest.length > 360 ? "<blockquote expandable>" : "<blockquote>") +
-          escapeHtml(progress.latest.slice(0, previewLength)) + "</blockquote>"
-        : preview
-      : "";
-    const telemetry = isBlacksite
-      ? footer
-        ? "\n<code>" + escapeHtml(footer.split("\n")[0] ?? "") + "</code>" +
-          (footer.includes("\n") ? "\n<i>" + escapeHtml(footer.split("\n").slice(1).join(" ")) + "</i>" : "")
-        : ""
-      : footer ? "\n\n<i>" + escapeHtml(footer).replace(/\n/g, "</i>\n<i>") + "</i>" : "";
-    const html = isHud
-      ? hudIntro +
-        (theme?.showPulse === false || !frame.pulse ? "" : " <code>" + frame.pulse + "</code>") +
-        "\n\n<b>" + escapeHtml(section) + "</b>\n" + hudActivity +
-        (theme?.showObjective === false || !currentObjective ? "" :
-          "\n\n<b>" + escapeHtml(venomTransmissionTitle(theme)) + "</b>\n" +
-          (currentObjective.length > 300 ? "<blockquote expandable>" : "<blockquote>") +
-          escapeHtml(currentObjective) + "</blockquote>") +
-        (hudTelemetry ? "\n\n<i>" + escapeHtml(hudTelemetry).replace(/\n/g, "</i>\n<i>") + "</i>" : "")
-      : isBlacksite
-      ? "<b>" + frame.eye + " " + escapeHtml(header) + "</b>\n" +
-        "<b>" + escapeHtml(venomThemeLabel(progress.activity, theme)) + "</b> " +
-        (theme?.showPulse === false || !frame.pulse ? "" : "<code>" + frame.pulse + "</code>") +
-        "\n\n<b>" + escapeHtml(section) + "</b>\n" + terminal +
-        transmission + "\n" + telemetry
-      : "<b>" + frame.eye + " " + escapeHtml(header) + "</b>\n" +
-        "<i>" + escapeHtml(venomThemeLabel(progress.activity, theme)) + "</i>\n" +
-        (theme?.showPulse === false || !frame.pulse ? "" : "<code>" + frame.pulse + "</code>\n") +
-        "\n<b>" + escapeHtml(section) + "</b>\n" + entries +
-        (preview ? "\n" + preview : "") + telemetry;
+    const style = theme?.preset;
+    const status = venomThemeLabel(progress.activity, theme);
+    const activity = formatVenomActivityHistory(progress.lines, escapeHtml, theme);
+    const showStates = theme?.showOperationStates !== false;
+    // Counts appear once. When state counts are shown, suppress the total
+    // operations figure in telemetry rather than duplicating it.
+    const footerOptions = { ...theme, showOperations: !showStates && theme?.showOperations !== false };
+    const footer = theme?.footerDensity === "compact"
+      ? formatVenomFooter(progress.count, Date.now() - progress.started, context, model, footerOptions)
+      : formatVenomTelemetry(progress.count, Date.now() - progress.started, context, model, footerOptions);
+    const objective = progress.latest
+      ? progress.latest.replace(/\s+/g, " ").trim().slice(0, 105)
+      : "Working on the current request";
+    const role = style === "classified" ? "[ CLASSIFIED // SYMBIOTE NETWORK ]\n" :
+      style === "predator-terminal" ? "[ PREDATOR TERMINAL ]\n" :
+      style === "blacksite" ? "[ BLACKSITE ]\n" : "";
+    // Stable message geometry: title, status, pulse, activity and footer never
+    // share a line. No moving spinner glyph at the beginning of the heading.
+    // Exactly X rows are reserved by formatVenomActivityHistory.
+    const html = (role ? "<code>" + escapeHtml(role.trim()) + "</code>\n" : "") +
+      "<b>" + escapeHtml(header) + "</b>\n" +
+      "<b>" + escapeHtml(status) + "</b>\n" +
+      (theme?.showPulse === false || !frame.pulse ? "<code>      </code>" : "<code>" + frame.pulse + "</code>") +
+      "\n\n<b>" + escapeHtml(section) + "</b>\n" +
+      (showStates ? "<i>" + escapeHtml(formatVenomOperationState(progress.completed, progress.running.size, progress.failed)) + "</i>\n" : "") +
+      activity +
+      (theme?.showObjective === false ? "" :
+        "\n\n<b>" + escapeHtml(venomTransmissionTitle(theme)) + "</b>\n" +
+        "<i>" + escapeHtml(objective) + "</i>") +
+      (footer ? "\n\n<code>" + escapeHtml(footer).replace(/\n/g, "</code>\n<code>") + "</code>" : "");
     try {
       // Keep edits serialized; an older animation frame must never overwrite
       // a newer tool event or the completed answer.
