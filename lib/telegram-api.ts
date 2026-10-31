@@ -184,9 +184,10 @@ export function __resetRichMessagesForTests(): void {
  */
 function isRichUnsupportedError(error: unknown): boolean {
   if (!(error instanceof TelegramApiRequestError)) return false;
-  // `Not Found` is Telegram's answer for an unknown method; an older server
-  // handed only `rich_message` on an edit replies `message text is empty`.
-  return /not found|unknown method|unsupported|message text is empty/i.test(error.message);
+  // Only an unknown Rich *method* establishes API-level unavailability.
+  // An edit-specific "message text is empty" can instead indicate an invalid
+  // message transition or payload and must not disable all Rich deliveries.
+  return /not found|unknown method|method .* not found/i.test(error.message);
 }
 
 export class TelegramSendSuppressedError extends Error {
@@ -298,9 +299,9 @@ export function createTelegramTransport(
    *  Rich Messages" disables the feature process-wide, so later tables do not
    *  pay a failed request each; content-specific rejections keep it enabled. */
   const noteRichFailure = (label: string, err: unknown) => {
-    if (isRichUnsupportedError(err)) {
+    if (label === "sendRichMessage" && isRichUnsupportedError(err)) {
       richMessagesAvailable = false;
-      apiLog.warn("Rich Messages are not supported by this Telegram API base; using HTML tables", {
+      apiLog.warn("Rich Messages are not supported by this Telegram API base; using HTML fallback", {
         method: label,
         reason: err instanceof Error ? err.message : String(err),
       });
