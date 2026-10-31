@@ -307,21 +307,31 @@ export function formatVenomActivityHistory(
   const newest = lines.slice(-count);
   const older = lines.slice(0, Math.max(0, lines.length - count));
   const prefix = venomThemeText(options?.consolePrefix, VENOM_DEFAULTS.consolePrefix, 8);
+  const fixedRows = options?.fixedOperationRows !== false;
   const formatLine = (line: string): string => {
     const match = /^\[([A-Z]+)\]\s*(.*)$/.exec(line);
     const tag = match?.[1];
     const raw = match?.[2] ?? line;
-    const detail = options?.operationDetail === "full" ? raw.slice(0, 140) : raw.slice(0, 75);
+    // A one-line activity row keeps Telegram's bubble from growing unpredictably.
+    const clean = raw.replace(/\s+/g, " ").trim();
+    const detailLimit = fixedRows ? 36 : options?.operationDetail === "full" ? 100 : 66;
+    const detail = clean.slice(0, detailLimit);
     return tag && /^(RECON|READ|PATCH|VERIFY|EXEC|TRACE|ERROR)$/.test(tag)
       ? "<b>[" + tag + "]</b> <code>" + escape(prefix + " " + detail) + "</code>"
       : "<code>" + escape(prefix + " " + detail) + "</code>";
   };
-  if (!newest.length) return "<i>" + escape(venomThemeText(options?.awaitingText, VENOM_DEFAULTS.awaitingText)) + "</i>";
-  const current = newest.map(formatLine).join("\n");
+  const placeholders = fixedRows ? Array.from({ length: Math.max(0, count - newest.length) },
+    () => "<code>" + escape("· awaiting operation") + "</code>") : [];
+  const rows = [...placeholders, ...newest.map(formatLine)];
+  if (rows.length === 0) rows.push("<i>" + escape(venomThemeText(options?.awaitingText, VENOM_DEFAULTS.awaitingText)) + "</i>");
+  const current = rows.join("\n");
   if (options?.collapseOperations !== "expandable" || !older.length) return current;
-  // Avoid giant HTML edits. Older history is explicitly bounded and escaped.
-  const historical = older.slice(-20).map(line => escape(line.slice(0, 110))).join("\n");
-  return current + "\n<blockquote expandable>" + older.length + " earlier operations\n" + historical + "</blockquote>";
+  // A native Telegram HTML expandable blockquote: older actions can be tapped
+  // open, without a new message or a custom callback button.
+  const history = older.slice(-20).map(line => escape(line.replace(/\s+/g, " ").slice(0, 105))).join("\n");
+  const omitted = Math.max(0, older.length - 20);
+  return current + "\n<blockquote expandable>" + older.length + " earlier operations · tap to expand\n" +
+    (omitted ? omitted + " older entries omitted\n" : "") + history + "</blockquote>";
 }
 
 export function formatVenomOperationState(completed: number, running: number, failed: number): string {

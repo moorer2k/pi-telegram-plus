@@ -31,6 +31,8 @@ export type VenomThemeOptions = {
   visibleOperations?: number;
   /** Earlier operations: omit them or include as a native expandable quote. */
   collapseOperations?: "off" | "expandable";
+  /** Reserve exactly X operation rows in live progress messages. */
+  fixedOperationRows?: boolean;
   /** Use terse status tags rather than verbose tool commands. */
   operationDetail?: "compact" | "full";
   /** Show a live completed/running/failed operation summary. */

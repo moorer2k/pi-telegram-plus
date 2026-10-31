@@ -138,6 +138,31 @@ describe("Venom Lethal Protector presentation", () => {
     expect(isVenomHud("blacksite")).toBe(false);
   });
 
+  it("reserves a constant row count while the live tool list grows", () => {
+    const escape = (value: string) => value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+    const opts = { visibleOperations: 3, fixedOperationRows: true, collapseOperations: "off" } as const;
+    const count = (lines: string[]) => formatVenomActivityHistory(lines, escape, opts).split("\n").length;
+    expect(count([])).toBe(3);
+    expect(count(["[READ] a"])).toBe(3);
+    expect(count(["[READ] a", "[VERIFY] test"])).toBe(3);
+    expect(count(["[READ] a", "[VERIFY] test", "[EXEC] done"])).toBe(3);
+    expect(count(["[READ] a", "[VERIFY] test", "[EXEC] done", "[READ] b"])).toBe(3);
+    expect(formatVenomActivityHistory([], escape, opts)).toContain("awaiting operation");
+    expect(formatVenomActivityHistory(["[READ] a"], escape, { ...opts, fixedOperationRows: false })).not.toContain("awaiting operation");
+  });
+
+  it("only shows expandable history when explicitly enabled and items exceed X", () => {
+    const esc = (text: string) => text;
+    const lines = ["[READ] one", "[READ] two", "[VERIFY] three", "[EXEC] four"];
+    const options = { visibleOperations: 2, collapseOperations: "expandable" } as const;
+    const html = formatVenomActivityHistory(lines, esc, options);
+    expect(html).toContain("<blockquote expandable>");
+    expect(html).toContain("2 earlier operations");
+    expect(html).toContain("tap to expand");
+    expect(formatVenomActivityHistory(lines.slice(-2), esc, options)).not.toContain("<blockquote");
+    expect(formatVenomActivityHistory(lines, esc, { ...options, collapseOperations: "off" })).not.toContain("<blockquote");
+  });
+
   it("shows X recent lines and optional expandable history without losing errors", () => {
     const esc = (value: string) => value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
     const lines = ["[READ] one.ts", "[READ] two.ts", "[ERROR] tool failed", "[VERIFY] npm test", "[EXEC] done"];
