@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { VENOM_PULSE_FRAMES, venomActivity, venomPulse, venomStatusLabel, formatHuntDuration, formatConsoleActivity, formatVenomConsole, venomThemeFrame, venomThemeLabel, venomThemeText, venomThemeNumber, formatVenomContextUsage, formatVenomFooter, venomPreset, VENOM_PRESETS, venomSectionTitle, venomTransmissionTitle, venomToolLine, venomToolTag, formatVenomTelemetry, formatVenomTerminalBlock, formatVenomActivityHistory, formatVenomOperationState, formatVenomLiveOperations, isVenomHud, venomCompletionLabel } from "../venom-theme.ts";
+import { VENOM_PULSE_FRAMES, venomActivity, venomPulse, venomStatusLabel, formatHuntDuration, formatConsoleActivity, formatVenomConsole, venomThemeFrame, venomThemeLabel, venomThemeText, venomThemeNumber, formatVenomContextUsage, formatVenomFooter, venomPreset, VENOM_PRESETS, venomSectionTitle, venomTransmissionTitle, venomToolLine, venomToolTag, formatVenomTelemetry, formatVenomTerminalBlock, formatVenomActivityHistory, formatVenomOperationState, formatVenomLiveOperations, formatVenomRichLivePanel, isVenomHud, venomCompletionLabel } from "../venom-theme.ts";
 
 describe("Venom Lethal Protector presentation", () => {
   it("cycles through symbiote pulse frames without reporting fictional completion", () => {
@@ -218,6 +218,33 @@ describe("Venom Lethal Protector presentation", () => {
     expect(result.split("\n")).toHaveLength(2);
     expect(result.length).toBeLessThan(100);
     expect(result).toContain("…");
+  });
+
+  it("renders native Rich headings, stable pulse and a closed details history", () => {
+    const operations = Array.from({ length: 4 }, (_, i) => ({
+      id: String(i), tag: "EXEC", tool: "bash",
+      detail: i === 0 ? "grep <secret> & token" : "git status",
+      state: "done" as const, startedAt: 0, finishedAt: 500,
+    }));
+    const meta = {
+      title: "VENOM // LETHAL PROTECTOR", status: "HUNT ACTIVE",
+      pulse: "▰▰▱▱▱▱", section: "SYMBIOTE ACTIVITY",
+      transmission: "NEURAL LINK", objective: "Checking service status",
+      model: "qwen", metrics: "CTX 24% · 18s",
+    };
+    const rich = formatVenomRichLivePanel(operations, {
+      visibleOperations: 3, collapseOperations: "expandable",
+    }, meta);
+    expect(rich).toContain("## SYMBIOTE ACTIVITY");
+    expect(rich).toContain("## NEURAL LINK");
+    expect(rich).toContain("`▰▰▱▱▱▱`");
+    expect(rich).toContain("<details>");
+    expect(rich).toContain("<summary>1 earlier traces</summary>");
+    expect(rich).toContain("&lt;secret&gt; &amp; token");
+    expect(rich).not.toContain("<blockquote expandable>");
+    expect(formatVenomRichLivePanel(operations, {
+      visibleOperations: 3, collapseOperations: "off",
+    }, meta)).not.toContain("<details>");
   });
 
   it("reports only actual operation states", () => {
