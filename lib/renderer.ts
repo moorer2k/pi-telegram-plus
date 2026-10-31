@@ -9,7 +9,7 @@ import type { TelegramConfig, TelegramRenderLevel, TelegramTransport, TelegramTu
 import type { SecretStore } from "./tui/secrets.ts";
 import { RENDER_LEVELS } from "./types.ts";
 import { log } from "./logger.ts";
-import { venomActivity, venomThemeFrame, venomThemeLabel, venomThemeNumber, venomThemeText, formatVenomContextUsage, formatVenomFooter, formatVenomConsole, formatVenomTerminalBlock, VENOM_DEFAULTS, venomSectionTitle, venomTransmissionTitle, venomToolLine, venomCompletionLabel, formatVenomTelemetry, type VenomActivity } from "./venom-theme.ts";
+import { venomActivity, venomThemeFrame, venomThemeLabel, venomThemeNumber, venomThemeText, formatVenomContextUsage, formatVenomFooter, formatVenomConsole, formatVenomTerminalBlock, VENOM_DEFAULTS, venomSectionTitle, venomTransmissionTitle, venomToolLine, venomCompletionLabel, formatVenomTelemetry, formatVenomActivityHistory, formatVenomOperationState, isVenomHud, type VenomActivity } from "./venom-theme.ts";
 
 const renderLog = log.child("renderer");
 
@@ -271,6 +271,7 @@ export function registerTelegramRenderer(
     target: "", lines: [] as string[], latest: "", messages: [] as string[],
     count: 0, lastEdit: 0, frame: 0, editing: false,
     activity: "awakening" as VenomActivity, started: 0,
+    running: new Set<string>(), completed: 0, failed: 0,
   };
   let progressTimer: ReturnType<typeof setInterval> | undefined;
   const stopProgressTimer = () => {
@@ -295,7 +296,7 @@ export function registerTelegramRenderer(
     const entries = formatVenomConsole(progress.lines, escapeHtml, theme);
     const previewLength = venomThemeNumber(theme?.previewLength, 500, 100, 1500);
     const preview = progress.latest ? "\n\n<b>" + escapeHtml(venomTransmissionTitle(theme)) + "</b>\n" + escapeHtml(progress.latest.slice(0, previewLength)) : "";
-    const frame = venomThemeFrame(progress.frame++, theme);
+    const frame = venomThemeFrame(Math.floor(Math.max(0, Date.now() - progress.started) / editGap), theme);
     // Live metrics may be absent on some Pi/OMP host versions.
     const session = deps.getSession?.();
     let contextUsage: unknown;
@@ -307,6 +308,23 @@ export function registerTelegramRenderer(
     const section = venomSectionTitle(theme);
     const footer = formatVenomTelemetry(progress.count, Date.now() - progress.started, context, modelName, theme);
     const isBlacksite = theme?.preset === "blacksite";
+    const isHud = isVenomHud(theme?.preset);
+    const hudHistory = formatVenomActivityHistory(progress.lines, escapeHtml, theme);
+    const currentObjective = progress.latest?.trim().slice(0, venomThemeNumber(theme?.previewLength, 500, 100, 1500));
+    const hudActivity = (theme?.showOperationStates === false ? "" :
+      "<i>" + escapeHtml(formatVenomOperationState(progress.completed, progress.running.size, progress.failed)) + "</i>\n") +
+      hudHistory;
+    const hudTelemetry = theme?.footerDensity === "compact"
+      ? formatVenomFooter(progress.count, Date.now() - progress.started, context, modelName, theme)
+      : footer;
+    const hudIntro = theme?.preset === "predator-terminal"
+      ? "<b>" + escapeHtml(header) + "</b>\n" + escapeHtml(venomThemeLabel(progress.activity, theme))
+      : theme?.preset === "classified"
+        ? "<b>[ CLASSIFIED // SYMBIOTE NETWORK ]</b>\n<b>" + escapeHtml(header) + "</b>\n" +
+          escapeHtml(venomThemeLabel(progress.activity, theme))
+        : "<b>" + frame.eye + " " + escapeHtml(header) + "</b>\n<b>" +
+          escapeHtml(venomThemeLabel(progress.activity, theme)) + "</b>";
+
     // Telegram HTML supports native preformatted blocks and blockquotes.
     // Only apply the richer layout to Blacksite; keep other presets unchanged.
     const terminal = isBlacksite
@@ -324,7 +342,16 @@ export function registerTelegramRenderer(
           (footer.includes("\n") ? "\n<i>" + escapeHtml(footer.split("\n").slice(1).join(" ")) + "</i>" : "")
         : ""
       : footer ? "\n\n<i>" + escapeHtml(footer).replace(/\n/g, "</i>\n<i>") + "</i>" : "";
-    const html = isBlacksite
+    const html = isHud
+      ? hudIntro +
+        (theme?.showPulse === false || !frame.pulse ? "" : " <code>" + frame.pulse + "</code>") +
+        "\n\n<b>" + escapeHtml(section) + "</b>\n" + hudActivity +
+        (theme?.showObjective === false || !currentObjective ? "" :
+          "\n\n<b>" + escapeHtml(venomTransmissionTitle(theme)) + "</b>\n" +
+          (currentObjective.length > 300 ? "<blockquote expandable>" : "<blockquote>") +
+          escapeHtml(currentObjective) + "</blockquote>") +
+        (hudTelemetry ? "\n\n<i>" + escapeHtml(hudTelemetry).replace(/\n/g, "</i>\n<i>") + "</i>" : "")
+      : isBlacksite
       ? "<b>" + frame.eye + " " + escapeHtml(header) + "</b>\n" +
         "<b>" + escapeHtml(venomThemeLabel(progress.activity, theme)) + "</b> " +
         (theme?.showPulse === false || !frame.pulse ? "" : "<code>" + frame.pulse + "</code>") +
@@ -492,6 +519,9 @@ export function registerTelegramRenderer(
       progress.lastEdit = 0;
       progress.frame = 0;
       progress.activity = "awakening";
+      progress.running.clear();
+      progress.completed = 0;
+      progress.failed = 0;
       progress.started = Date.now();
       progress.editing = false;
       // Telegram has no continually animated text format. Edit the existing
@@ -529,6 +559,7 @@ export function registerTelegramRenderer(
     if (level === "hidden") return;
     if (level === "progress") {
       progress.count++;
+      progress.running.add(event.toolCallId);
       progress.activity = venomActivity(event.toolName, event.args);
       toolArgs.set(event.toolCallId, event.args);
       const brief = formatToolBrief(event.toolName, event.args).replace(/^🔧 /, "");
@@ -576,6 +607,10 @@ ${partial}`);
     const args = toolArgs.get(event.toolCallId);
     toolArgs.delete(event.toolCallId);
     if (level === "progress") {
+      if (progress.running.delete(event.toolCallId)) {
+        if (event.isError) progress.failed++;
+        else progress.completed++;
+      }
       if (event.isError) {
         progress.activity = "adapting";
         const failure = formatToolFailureBrief(event.toolName, event.result, args);
