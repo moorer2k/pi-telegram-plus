@@ -308,7 +308,18 @@ export function fallbackMalformedPipeTables(markdown: string): string {
     // Require at least two adjacent separators. Without them this might be
     // code, prose with pipes, a URL, or an ordinary aligned data fragment.
     const sep = cells.findIndex((cell, i) => i >= 2 && isSep(cell) && isSep(cells[i + 1] ?? ""));
-    if (sep < 2 || sep > 6) { out.push(line); continue; }
+    if (sep < 2 || sep > 6) {
+      // A badly broken table can have too many/missing header cells. If it
+      // still contains an obvious separator run, show a readable sequence,
+      // never raw Markdown separator syntax to the Telegram user.
+      if (cells.some((cell, i) => isSep(cell) && isSep(cells[i + 1] ?? ""))) {
+        const data = cells.filter(cell => !isSep(cell));
+        out.push([...(prefix ? [prefix, ""] : []), ...data.map(value => "- " + value)].join("\n"));
+      } else {
+        out.push(line);
+      }
+      continue;
+    }
     let sepEnd = sep;
     while (sepEnd < cells.length && isSep(cells[sepEnd])) sepEnd++;
     const width = sepEnd - sep;
