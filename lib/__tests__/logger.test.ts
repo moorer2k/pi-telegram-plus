@@ -139,7 +139,7 @@ describe("dedicated error diagnostics", () => {
     log.error("delivery failed", { chatId: 123, err: new Error("timeout") });
     await drain();
     const files = await __drainAndListFiles(dir);
-    const errors = files.find((file) => /^pi-telegram-plus-errors-\\d{4}-\\d{2}-\\d{2}\\.log$/.test(basename(file)));
+    const errors = files.find((file) => /^pi-telegram-plus-errors-\d{4}-\d{2}-\d{2}\.log$/.test(basename(file)));
     expect(errors).toBeDefined();
     const records = parseLines(await readFile(errors!, "utf8"));
     expect(records).toHaveLength(1);
