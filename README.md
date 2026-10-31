@@ -303,3 +303,22 @@ This option will refuse to run when the installed plugin is not a clean Git chec
 After confirmation Venom sends a random Lethal Protector shutdown phrase and the target Git commit before requesting the restart. The pending notification is stored in the Pi agent directory and survives process termination. Once the restarted process has resumed active Telegram polling, Venom sends one randomly selected return phrase and the installed commit. A restart that fails to resume polling cannot send a false success notice; inspect the systemd journal in that case. Pending notices expire after 15 minutes.
 
 This update mechanism does not run automatically on startup. No Telegram chat participant other than the paired owner can trigger it.
+
+### Customize Venom restart messages
+
+Use `/tg → Config → Venom restart phrases`. The menu has **Before restart** and **After restart** lists. Each list displays all configured phrases and allows **Add phrase**, selecting an existing phrase to **Delete this phrase** (with confirmation), and **Restore default phrases** (with confirmation).
+
+Five bundled phrases are initially available per stage. Settings are stored in the active project's `.pi/telegram.json` under `venomRestartPhrases.before` and `venomRestartPhrases.after`. Lists are independent and persist through plugin updates and Pi-Bolt restarts. Phrases are selected randomly for each stage. A list must retain at least one entry, with a maximum of 30 entries and 240 characters per phrase. Custom text is escaped for Telegram HTML output.
+
+Example optional settings:
+
+```json
+{
+  "venomRestartPhrases": {
+    "before": ["The symbiote is shedding its old skin. Stay close."],
+    "after": ["We are Venom. And we are back."]
+  }
+}
+```
+
+Absent phrase lists use the built-in five phrases, and resetting one list does not modify the other. No changes to the bot registry or credentials are needed.
