@@ -43,7 +43,7 @@ export async function configVenomPhrasesFlow(ui: MenuUi, deps: TgConfigDeps): Pr
         const input = await ui.input("New Venom phrase (max " + MAX_VENOM_PHRASE_LENGTH + " characters)");
         if (input === undefined) continue;
         const phrase = input.trim();
-        if (!phrase || phrase.length > MAX_VENOM_PHRASE_LENGTH || /[\\x00-\\x1f\\x7f]/.test(phrase)) {
+        if (!phrase || phrase.length > MAX_VENOM_PHRASE_LENGTH || /[\x00-\x1f\x7f]/.test(phrase)) {
           ui.notify("Enter a single-line phrase of 1–" + MAX_VENOM_PHRASE_LENGTH + " characters.", "error");
           continue;
         }
