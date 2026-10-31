@@ -411,25 +411,19 @@ export function formatVenomRichLivePanel(
   const recent = operations.slice(-count);
   const older = operations.slice(0, -count);
   const line = (op: VenomLiveOperation): string => {
-    const tag = op.tag.replace(/[^A-Z0-9_-]/gi, "").slice(0, 10).toUpperCase() || "TRACE";
     const duration = op.state !== "running" && op.finishedAt !== undefined
       ? " " + (Math.max(0, op.finishedAt - op.startedAt) / 1000).toFixed(1) + "s" : "";
-    const state = options?.showOperationStates === false ? "" : " · " + op.state.toUpperCase() + duration;
-    // The tool name is already shown as a tag; omit repeated "bash:" or
-    // "terminal:" prefixes. Backticks prevent URLs from becoming clickable
-    // rich links (a major source of unexpected Android line wrapping).
-    const raw = (op.detail || op.tool).replace(/^(?:bash|terminal|exec):\s*/i, "");
-    const detail = venomRichShort(raw, VENOM_RICH_DETAIL_WIDTH);
-    const glyph = op.state === "failed" ? "×" : op.state === "done" ? "◆" : "◈";
-    const safeCode = detail.replace(/&/g, "&amp;").replace(/</g, "&lt;").replaceAll("`", "'");
-    return "**" + glyph + " " + tag + escaped(state) + "**\n" +
-      "`" + safeCode + "`";
+    const state = options?.showOperationStates === false ? "" : " · " + op.state.toLowerCase() + duration;
+    const raw = (op.detail || op.tool).replace(/^(?:bash|terminal|exec):\\s*/i, "");
+    const detail = venomRichShort(raw, venomThemeNumber(options?.commandLength, 72, 24, 240));
+    const safeCode = detail.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replaceAll("`", "'");
+    return "- `" + safeCode + "`" + escaped(state);
   };
   const slots = [...recent.map(line)];
   if (options?.fixedOperationRows !== false) {
-    for (let i = slots.length; i < count; i++) slots.push("**◈ TRACE · IDLE**\n`awaiting operation`");
+    for (let i = slots.length; i < count; i++) slots.push("- `awaiting operation` · idle");
   }
-  if (!slots.length) slots.push("**◈ TRACE · IDLE**\n`awaiting operation`");
+  if (!slots.length) slots.push("- `awaiting operation` · idle");
 
   // Always reserve the same collapsed history slot, so a fourth tool doesn't
   // suddenly insert a new section. Keep the summary short and constant;
@@ -447,7 +441,7 @@ export function formatVenomRichLivePanel(
   return "**" + escaped(venomRichShort(meta.title, 38)) + "**\n\n" +
     "**◈ " + escaped(venomRichShort(meta.status, 32)) + "**\n\n" +
     (options?.showPulse === false ? "" : "\`" + (meta.pulse || "▱".repeat(VENOM_PULSE_WIDTH)) + "\`\n\n") +
-    "## " + escaped(meta.section) + "\n\n" + slots.join("\n\n") + history +
+    "## " + escaped(meta.section) + "\n\n" + slots.join("\n") + history +
     (options?.showObjective === false ? "" :
       "\n\n## " + escaped(meta.transmission) + "\n\n" + escaped(venomRichShort(meta.objective, VENOM_RICH_META_WIDTH))) +
     "\n\n" + escaped(venomRichShort(meta.model, VENOM_RICH_META_WIDTH)) +
