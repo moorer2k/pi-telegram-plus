@@ -391,6 +391,23 @@ export function formatVenomLiveOperations(
  * The ordinary HTML HUD remains the fallback for Bot API servers without Rich.
  * Never interpolate unescaped tool contents into Markdown or HTML.
  */
+/** Constant visual floor to discourage Telegram from shrinking the bubble.
+ * Twenty-six monospace cells fit typical phone widths with a reply quote gutter.
+ * Not a guarantee: Telegram owns the final bubble sizing. */
+export const VENOM_RICH_WIDTH_ANCHOR = "━".repeat(26);
+const VENOM_RICH_DETAIL_WIDTH = 30;
+const VENOM_RICH_META_WIDTH = 32;
+
+function venomRichShort(value: string, max: number): string {
+  const clean = value.replace(/\s+/g, " ").trim();
+  return Array.from(clean).length > max
+    ? Array.from(clean).slice(0, max - 1).join("") + "…"
+    : clean;
+}
+
+/** A native Rich card with predictable section geometry across every edit.
+ * Use a fixed anchor and consistently bounded text instead of relying on
+ * whatever length the latest command happens to be. */
 export function formatVenomRichLivePanel(
   operations: readonly VenomLiveOperation[],
   options: VenomThemeOptions | undefined,
@@ -406,7 +423,7 @@ export function formatVenomRichLivePanel(
     const duration = op.state !== "running" && op.finishedAt !== undefined
       ? " " + (Math.max(0, op.finishedAt - op.startedAt) / 1000).toFixed(1) + "s" : "";
     const state = options?.showOperationStates === false ? "" : " · " + op.state.toUpperCase() + duration;
-    const detail = (op.detail || op.tool).replace(/\s+/g, " ").slice(0, 82);
+    const detail = venomRichShort(op.detail || op.tool, VENOM_RICH_DETAIL_WIDTH);
     return "- **" + tag + escaped(state) + "**\n  " + escaped(detail);
   };
   const slots = [...recent.map(line)];
@@ -414,17 +431,30 @@ export function formatVenomRichLivePanel(
     for (let i = slots.length; i < count; i++) slots.push("- **TRACE · IDLE**\n  awaiting operation");
   }
   if (!slots.length) slots.push("- Awaiting target");
-  const history = options?.collapseOperations === "off" || !older.length ? "" :
-    "\n\n<details>\n<summary>" + older.length + " earlier traces</summary>\n\n" +
-    older.slice(-16).map(op => "- " + escaped(op.tag + " · " + op.state + " · " + op.detail.slice(0, 65))).join("\n") +
+
+  // Always reserve the same collapsed history slot, so a fourth tool doesn't
+  // suddenly insert a new section. Keep the summary short and constant;
+  // historical commands are hidden until the user expands the details.
+  const history = options?.collapseOperations === "off" ? "" :
+    "\n\n<details>\n<summary>Earlier traces</summary>\n\n" +
+    (older.length
+      ? older.slice(-16).map(op => "- " + escaped(venomRichShort(
+        op.tag + " · " + op.state + " · " + op.detail, 65))).join("\n")
+      : "No earlier traces") +
     "\n\n</details>";
-  return "**" + escaped(meta.title) + "**\n\n" +
-    escaped(meta.status) + "\n\n" +
+
+  // The anchor establishes the same minimum visible line width on every frame.
+  // The animated six-segment pulse retains its independent line immediately
+  // below; it does not attempt to communicate percent task completion.
+  return "**" + escaped(venomRichShort(meta.title, 38)) + "**\n\n" +
+    "\`" + VENOM_RICH_WIDTH_ANCHOR + "\`\n\n" +
+    escaped(venomRichShort(meta.status, 36)) + "\n\n" +
     (options?.showPulse === false ? "" : "\`" + (meta.pulse || "▱▱▱▱▱▱") + "\`\n\n") +
     "## " + escaped(meta.section) + "\n\n" + slots.join("\n") + history +
     (options?.showObjective === false ? "" :
-      "\n\n## " + escaped(meta.transmission) + "\n\n" + escaped(meta.objective)) +
-    "\n\n" + escaped(meta.model) + "\n\n" + escaped(meta.metrics);
+      "\n\n## " + escaped(meta.transmission) + "\n\n" + escaped(venomRichShort(meta.objective, VENOM_RICH_META_WIDTH))) +
+    "\n\n" + escaped(venomRichShort(meta.model, VENOM_RICH_META_WIDTH)) +
+    "\n\n" + escaped(venomRichShort(meta.metrics, VENOM_RICH_META_WIDTH));
 }
 
 export function formatVenomOperationState(completed: number, running: number, failed: number): string {
