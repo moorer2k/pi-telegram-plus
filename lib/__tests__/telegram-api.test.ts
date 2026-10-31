@@ -309,7 +309,7 @@ describe("createTelegramTransport — Rich Messages (native Markdown tables)", (
       chat_id: 123,
       message_thread_id: 456,
       reply_parameters: { message_id: 789 },
-      rich_message: { markdown: table },
+      rich_message: { markdown: table, skip_entity_detection: true },
     });
     expect(calls[0].body.parse_mode).toBeUndefined();
     expect(sent).toEqual([{ message_id: 42 }]);
@@ -373,7 +373,7 @@ describe("createTelegramTransport — Rich Messages (native Markdown tables)", (
     expect(calls[0].body).toMatchObject({
       chat_id: 1,
       message_id: 10,
-      rich_message: { markdown: table },
+      rich_message: { markdown: table, skip_entity_detection: true },
     });
   });
 
@@ -389,9 +389,9 @@ describe("createTelegramTransport — Rich Messages (native Markdown tables)", (
     await transport.editText(42, initial[0].message_id, "<b>VENOM</b>\n<b>HUNT ACTIVE</b>",
       "**VENOM**\n\n## SYMBIOTE ACTIVITY\n\n- **EXEC · ACTIVE**");
     expect(calls.map(c => c.method)).toEqual(["sendRichMessage", "editMessageText"]);
-    expect(calls[0].body.rich_message).toEqual({ markdown: "**VENOM**\n\n## SYMBIOTE ACTIVITY\n\n- Awaiting target" });
+    expect(calls[0].body.rich_message).toEqual({ skip_entity_detection: true, markdown: "**VENOM**\n\n## SYMBIOTE ACTIVITY\n\n- Awaiting target" });
     expect(calls[1].body.message_id).toBe(31);
-    expect(calls[1].body.rich_message).toEqual({ markdown: "**VENOM**\n\n## SYMBIOTE ACTIVITY\n\n- **EXEC · ACTIVE**" });
+    expect(calls[1].body.rich_message).toEqual({ skip_entity_detection: true, markdown: "**VENOM**\n\n## SYMBIOTE ACTIVITY\n\n- **EXEC · ACTIVE**" });
     expect(calls.every(c => c.body.parse_mode === undefined)).toBe(true);
   });
 
