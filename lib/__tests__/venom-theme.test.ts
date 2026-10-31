@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { VENOM_PULSE_FRAMES, venomActivity, venomPulse, venomStatusLabel, formatHuntDuration, formatConsoleActivity, formatVenomConsole, venomThemeFrame, venomThemeLabel, venomThemeText, venomThemeNumber, formatVenomContextUsage, formatVenomFooter, venomPreset, VENOM_PRESETS, venomSectionTitle, venomTransmissionTitle, venomToolLine, venomToolTag, formatVenomTelemetry, formatVenomTerminalBlock, venomCompletionLabel } from "../venom-theme.ts";
+import { VENOM_PULSE_FRAMES, venomActivity, venomPulse, venomStatusLabel, formatHuntDuration, formatConsoleActivity, formatVenomConsole, venomThemeFrame, venomThemeLabel, venomThemeText, venomThemeNumber, formatVenomContextUsage, formatVenomFooter, venomPreset, VENOM_PRESETS, venomSectionTitle, venomTransmissionTitle, venomToolLine, venomToolTag, formatVenomTelemetry, formatVenomTerminalBlock, formatVenomCompactOperations, venomCompletionLabel } from "../venom-theme.ts";
 
 describe("Venom Lethal Protector presentation", () => {
   it("cycles through symbiote pulse frames without reporting fictional completion", () => {
@@ -7,6 +7,24 @@ describe("Venom Lethal Protector presentation", () => {
     expect(venomPulse(0)).toEqual(venomPulse(VENOM_PULSE_FRAMES.length));
     expect(venomPulse(0)).not.toEqual(venomPulse(1));
     expect(VENOM_PULSE_FRAMES.every(frame => !frame.pulse.includes("%"))).toBe(true);
+  });
+
+  it("sweeps from empty to full before resetting with no backwards steps", () => {
+    const fills = VENOM_PULSE_FRAMES.map(frame => [...frame.pulse].filter(ch => ch === "▰").length);
+    expect(fills).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    expect(venomPulse(VENOM_PULSE_FRAMES.length).pulse).toBe(VENOM_PULSE_FRAMES[0].pulse);
+  });
+
+  it("renders compact safe Blacksite operations without large preformatted cards", () => {
+    const escape = (text: string) => text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+    const rendered = formatVenomCompactOperations(
+      ["[RECON] rg foo lib/", "[READ] lib/a.ts", "[VERIFY] npm test <unsafe>"], escape, { visibleOperations: 2 },
+    );
+    expect(rendered).toContain("<b>[READ]</b> <code>&gt; lib/a.ts</code>");
+    expect(rendered).toContain("<b>[VERIFY]</b> <code>&gt; npm test &lt;unsafe&gt;</code>");
+    expect(rendered).not.toContain("<pre>");
+    expect(rendered).not.toContain("[RECON]");
+    expect(formatVenomCompactOperations([], escape)).toContain("awaiting target");
   });
 
   it("identifies meaningful activity from actual tool arguments", () => {
