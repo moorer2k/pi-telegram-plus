@@ -118,4 +118,19 @@ describe("isolated session lifecycle", () => {
     expect(registry.size()).toBe(0);
   });
 
+  it("enforces session limits without blocking existing targets", async () => {
+    const registry = new IsolatedSessionRegistry(async ({ chatId }) => ({ chatId }), async () => {}, 1);
+    const existing = await registry.get({ chatId: 1 });
+    await expect(registry.get({ chatId: 2 })).rejects.toThrow("limit reached");
+    expect((await registry.get({ chatId: 1 })).session).toBe(existing.session);
+    await registry.release({ chatId: 1 });
+    expect((await registry.get({ chatId: 2 })).session.chatId).toBe(2);
+    await registry.dispose();
+  });
+
+  it("rejects invalid session limits", () => {
+    expect(() => new IsolatedSessionRegistry(async () => ({}), async () => {}, 0)).toThrow("limit");
+    expect(() => new IsolatedSessionRegistry(async () => ({}), async () => {}, Number.NaN)).toThrow("limit");
+  });
+
 });
