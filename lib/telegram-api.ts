@@ -303,7 +303,7 @@ export function createTelegramTransport(
    *  Rich Messages" disables the feature process-wide, so later tables do not
    *  pay a failed request each; content-specific rejections keep it enabled. */
   const noteRichFailure = (label: string, err: unknown) => {
-    if (label === "sendRichMessage" && isRichUnsupportedError(err)) {
+    if (isRichUnsupportedError(err)) {
       richMessagesAvailable = false;
       apiLog.warn("Rich Messages are not supported by this Telegram API base; using HTML fallback", {
         method: label,
