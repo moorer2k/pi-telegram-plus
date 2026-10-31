@@ -423,7 +423,7 @@ export function createTelegramTransport(
           // underlying status changes. Telegram reports 'not modified' but
           // the current Rich card is valid: never overwrite it with HTML.
           if (err instanceof TelegramApiRequestError && /message is not modified/i.test(err.message)) return;
-          if (isNetworkError(err)) return;
+          if (isNetworkError(err) || isMissingEditTarget(err)) throw err;
           noteRichFailure("editMessageText", err);
         }
       }
@@ -444,7 +444,8 @@ export function createTelegramTransport(
           link_preview_options: { is_disabled: true },
         }, undefined, lease).catch(err => {
           if (isMissingEditTarget(err) || isNetworkError(err)) throw err;
-          apiLog.debug("editMessageText plain-text fallback failed", { chatId, messageId, err });
+          apiLog.warn("editMessageText plain-text fallback failed", { chatId, messageId, err });
+          throw err;
         });
       });
     },
