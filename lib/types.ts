@@ -280,7 +280,7 @@ export type TelegramTransport = {
   sendPhoto(chatId: number, data: string, caption?: string, isPath?: boolean, signal?: AbortSignal, messageThreadId?: number, replyToMessageId?: number): Promise<void>;
   /** Telegram Bot API ephemeral draft, private chats only; never a persisted message. */
   sendDraft?(chatId: number, draftId: number, text: string): Promise<void>;
-  /** React to an existing Telegram message using the Bot API. */
+  /** Set an emoji reaction; pass an empty string to remove the bot's reaction. */
   setReaction?(chatId: number, messageId: number, emoji: string): Promise<void>;
   sendChatAction(chatId: number, action: string, messageThreadId?: number): Promise<void>;
 };
