@@ -1220,8 +1220,17 @@ export function createTelegramController(deps: {
     // Chain behind the previous prompt for this chat/thread so multiple
     // messages are delivered to the main thread in order.
     const key = targetKey(chatId, messageThreadId);
+    // Bound queued work per topic to avoid unbounded memory growth when an
+    // agent is stalled or a Telegram client floods messages.
+    const pending = pendingPromptCounts.get(key) ?? 0;
+    if (pending >= 32) {
+      ctrlLog.warn("telegram prompt queue capacity reached", { chatId, messageThreadId, pending });
+      await deps.transport.sendText(chatId, "Queue full (32 pending messages). Use /queue clear or wait for delivery.", messageThreadId, sourceMessageId)
+        .catch(ctrlLog.swallow("warn", "queue capacity notice failed", { chatId, messageThreadId }));
+      return;
+    }
     const generation = getInterruptGeneration(key);
-    pendingPromptCounts.set(key, (pendingPromptCounts.get(key) ?? 0) + 1);
+    pendingPromptCounts.set(key, pending + 1);
     const task = getOrCreateTail(key)
       .then(async () => {
         // The queued item is no longer pending once its dispatch slot starts.
