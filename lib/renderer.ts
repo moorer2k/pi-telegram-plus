@@ -3,6 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { escapeHtml } from "./html.ts";
+import { prepareDraftPreview } from "./draft-preview.ts";
 import { markdownToTelegramHtml } from "./markdown.ts";
 import { richMarkdownForTables } from "./rich-message.ts";
 import type { TelegramConfig, TelegramRenderLevel, TelegramTransport, TelegramTurn } from "./types.ts";
@@ -521,7 +522,7 @@ export function registerTelegramRenderer(
     if (!preview) return;
     // Preserve the most recent output for long responses, without splitting
     // a UTF-8 sequence or exceeding Telegram's draft payload limit.
-    const safe = Array.from(preview).slice(-3500).join("");
+    const safe = prepareDraftPreview(preview);
     draftBusy = true;
     draftLastSent = Date.now();
     try {
