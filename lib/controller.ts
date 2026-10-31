@@ -1045,6 +1045,14 @@ export function createTelegramController(deps: {
         messageThreadId, sourceMessageId);
       return;
     }
+    // The shared Pi session may have switched ownership since the first
+    // lookup. Re-check immediately before invoking the session-global abort.
+    if (deps.getActiveTurn(chatId, messageThreadId) !== ownedTurn) {
+      ctrlLog.warn("telegram stop skipped abort after turn ownership changed", { chatId, messageThreadId });
+      await deps.transport.sendText(chatId, "Turn ownership changed before abort; only your pending queue was cleared.", messageThreadId, sourceMessageId)
+        .catch(ctrlLog.swallow("warn", "sendText changed-ownership notice failed", { chatId, messageThreadId }));
+      return;
+    }
     // Never let a failed Telegram acknowledgement suppress the abort itself.
     // Execute the abort first, then report the actual outcome.
     try {
