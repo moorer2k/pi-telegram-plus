@@ -240,7 +240,7 @@ describe("Telegram shell commands", () => {
       await send(harness.controller, "!echo hi", 13, "supergroup");
 
       expect(runText).not.toHaveBeenCalled();
-      expect(harness.calls.some((call) => call.text?.includes("private chats"))).toBe(true);
+      await vi.waitFor(() => expect(harness.calls.some((call) => call.text?.includes("private chats"))).toBe(true));
     } finally {
       runText.mockRestore();
     }
