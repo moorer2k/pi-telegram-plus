@@ -80,10 +80,11 @@ export function richMarkdownForDraft(markdown: string): string | undefined {
   // math delimiters and fence openers can all be mid-token).
   if (lines.length > 1 && lines[lines.length - 1] !== "") lines.pop();
   let safe = lines.join("\n");
+  // Drop the incomplete fence block, but retain complete preceding content.
   while (safe && !hasBalancedFences(safe)) {
-    const at = safe.lastIndexOf("\n");
-    if (at < 0) return undefined;
-    safe = safe.slice(0, at);
+    const opening = [...safe.matchAll(/^ {0,3}(`{3,}|~{3,})[^\n]*$/gm)].pop();
+    if (!opening || opening.index === undefined) return undefined;
+    safe = safe.slice(0, opening.index).trimEnd();
   }
   if (!safe.trim()) return undefined;
   return richMarkdownForResponse(safe);
