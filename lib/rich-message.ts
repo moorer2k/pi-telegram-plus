@@ -80,12 +80,26 @@ export function richMarkdownForDraft(markdown: string): string | undefined {
   // math delimiters and fence openers can all be mid-token).
   if (lines.length > 1 && lines[lines.length - 1] !== "") lines.pop();
   let safe = lines.join("\n");
-  // Drop the incomplete fence block, but retain complete preceding content.
-  while (safe && !hasBalancedFences(safe)) {
-    const opening = [...safe.matchAll(/^ {0,3}(`{3,}|~{3,})[^\n]*$/gm)].pop();
-    if (!opening || opening.index === undefined) return undefined;
-    safe = safe.slice(0, opening.index).trimEnd();
+  // Remove the actual unmatched opener, not merely the last fence-like
+  // line: a closing delimiter with trailing text is not a valid closer.
+  let opener: number | undefined;
+  let marker = "";
+  let width = 0;
+  for (const match of safe.matchAll(/^ {0,3}(`{3,}|~{3,})([^\n]*)$/gm)) {
+    const token = match[1];
+    if (opener === undefined) {
+      if (token[0] === "`" && match[2].includes("`")) continue;
+      opener = match.index;
+      marker = token[0];
+      width = token.length;
+    } else if (token[0] === marker && token.length >= width && !match[2].trim()) {
+      opener = undefined;
+      marker = "";
+      width = 0;
+    }
   }
+  if (opener !== undefined) safe = safe.slice(0, opener).trimEnd();
+  if (!hasBalancedFences(safe)) return undefined;
   if (!safe.trim()) return undefined;
   return richMarkdownForResponse(safe);
 }
