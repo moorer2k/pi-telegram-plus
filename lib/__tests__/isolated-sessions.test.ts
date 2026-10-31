@@ -79,4 +79,43 @@ describe("isolated session lifecycle", () => {
     expect(disposeSession).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps main chat and forum topic keys unambiguous", () => {
+    expect(IsolatedSessionRegistry.key({ chatId: -100 })).not.toBe(
+      IsolatedSessionRegistry.key({ chatId: -100, messageThreadId: 1 }),
+    );
+    expect(IsolatedSessionRegistry.key({ chatId: 1, messageThreadId: 2 })).not.toBe(
+      IsolatedSessionRegistry.key({ chatId: 2, messageThreadId: 1 }),
+    );
+  });
+
+  it("rejects malformed Telegram target identifiers", async () => {
+    const registry = new IsolatedSessionRegistry(async () => ({}), async () => {});
+    await expect(registry.get({ chatId: Number.NaN })).rejects.toThrow("chat ID");
+    await expect(registry.get({ chatId: 1, messageThreadId: 0 })).rejects.toThrow("topic ID");
+    await expect(registry.get({ chatId: 1, messageThreadId: 1.5 })).rejects.toThrow("topic ID");
+    expect(registry.size()).toBe(0);
+  });
+
+  it("reports only currently registered sessions", async () => {
+    const registry = new IsolatedSessionRegistry(async () => ({}), async () => {});
+    const target = { chatId: 22, messageThreadId: 4 };
+    expect(registry.has(target)).toBe(false);
+    expect(registry.size()).toBe(0);
+    await registry.get(target);
+    expect(registry.has(target)).toBe(true);
+    expect(registry.size()).toBe(1);
+    await registry.release(target);
+    expect(registry.has(target)).toBe(false);
+    expect(registry.size()).toBe(0);
+  });
+
+  it("allows shutdown to be repeated without double disposal", async () => {
+    const disposeSession = vi.fn(async () => {});
+    const registry = new IsolatedSessionRegistry(async () => ({}), disposeSession);
+    await registry.get({ chatId: 4 });
+    await Promise.all([registry.dispose(), registry.dispose()]);
+    expect(disposeSession).toHaveBeenCalledTimes(1);
+    expect(registry.size()).toBe(0);
+  });
+
 });
