@@ -1887,10 +1887,26 @@ export function createTelegramController(deps: {
           return;
         }
         const stopSession = deps.getSession();
-        if (stopSession && isBashRunning(stopSession)) {
+        if (stopSession && isBashRunning(stopSession) && deps.getActiveTurn(chatId, messageThreadId)) {
           const abort = readBashAbort(stopSession);
-          await Promise.resolve(abort?.()).catch(ctrlLog.swallow("debug", "abortBash from /stop failed"));
-          await deps.transport.sendText(chatId, "⏹️ Bash stopped.", messageThreadId, sourceMessageId);
+          if (!abort) {
+            ctrlLog.warn("telegram stop bash abort unavailable", { chatId, messageThreadId });
+            await deps.transport.sendText(chatId, "Bash abort is unavailable.", messageThreadId, sourceMessageId);
+            return;
+          }
+          try {
+            // Bash abort is session-global, so recheck ownership immediately
+            // before invoking it, just as for regular turn interruption.
+            if (!deps.getActiveTurn(chatId, messageThreadId)) {
+              await fastInterrupt(chatId, messageThreadId, sourceMessageId);
+              return;
+            }
+            await Promise.resolve(abort());
+            await deps.transport.sendText(chatId, "⏹️ Bash stop requested.", messageThreadId, sourceMessageId);
+          } catch (err) {
+            ctrlLog.error("telegram stop bash abort failed", { chatId, messageThreadId, err });
+            await deps.transport.sendText(chatId, "Bash stop failed. Check the Telegram error log.", messageThreadId, sourceMessageId);
+          }
           return;
         }
         await fastInterrupt(chatId, messageThreadId, sourceMessageId);
