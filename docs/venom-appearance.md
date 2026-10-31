@@ -152,8 +152,12 @@ To verify a live agent: the initial request should use `sendRichMessage`, follow
 
 ## Width-stable Lethal Protector Rich HUD
 
-The live Rich status panel now includes a fixed **26-cell terminal-style divider** on every edit (including the initial progress placeholder), to reduce Telegram bubble-width changes as command output varies. The width anchor is a visual hint, not a Telegram API width guarantee. Tool excerpts are capped to 30 codepoints and model/telemetry lines to 32 to reduce unexpected wraps on mobile. If a phone's font or reply-gutter width is unusually narrow, the Telegram client may still reflow.
+The experimental 26-cell terminal divider has been **removed**. It did not stabilize Telegram's bubble width and competed visually with the actual symbiote pulse. Live Rich tool excerpts are now limited to 24 codepoints and rendered as short inline-code lines, rather than bulleted text followed by long automatically linked URLs. Repeated `bash:`/`terminal:` prefixes are omitted from tool excerpts. Model, telemetry and objective remain capped to 30 characters. The 12-cell pulse is the only horizontal visual motif. Telegram clients still calculate the final bubble width and may resize it when content changes.
 
 The **symbiote pulse now has 12 segments**, rather than six, and still fills monotonically before starting over. It is an activity signal, never a fictional task-progress estimate. Pulse remains on its own line, below the status, with no moving text alongside it.
 
 Venom's Rich activity rows also distinguish live state without duplicating numeric tool totals: `◈` running, `◆` completed, `×` failed. Earlier traces keep a constant `<details>` slot throughout the turn, even before tools accumulate. The menu's explicit "collapse history: off" continues to hide that slot.
+
+## Compact traces (post-divider correction)
+
+Each trace uses a short bold Venom lifecycle label (`◈`, `◆`, `×`) and one code-formatted command excerpt. This prevents automatic URL linking and excessive text wrapping. Fixed tool slots remain and the native Rich `<details>` history stays in place. The control is **not** a way to force a Telegram message to a fixed pixel width; the Bot API does not provide one.
