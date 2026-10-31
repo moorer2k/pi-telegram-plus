@@ -9,7 +9,7 @@ import type { TelegramConfig, TelegramRenderLevel, TelegramTransport, TelegramTu
 import type { SecretStore } from "./tui/secrets.ts";
 import { RENDER_LEVELS } from "./types.ts";
 import { log } from "./logger.ts";
-import { venomActivity, venomThemeFrame, venomThemeLabel, venomThemeNumber, venomThemeText, formatVenomContextUsage, formatHuntDuration, VENOM_DEFAULTS, venomSectionTitle, venomTransmissionTitle, venomCompletionLabel, formatVenomLiveOperations, venomToolTag, type VenomLiveOperation, type VenomActivity } from "./venom-theme.ts";
+import { venomActivity, venomThemeFrame, venomThemeLabel, venomThemeNumber, venomThemeText, formatVenomContextUsage, formatHuntDuration, VENOM_DEFAULTS, venomSectionTitle, venomTransmissionTitle, venomCompletionLabel, formatVenomLiveOperations, formatVenomRichLivePanel, venomToolTag, type VenomLiveOperation, type VenomActivity } from "./venom-theme.ts";
 
 const renderLog = log.child("renderer");
 
@@ -338,7 +338,16 @@ export function registerTelegramRenderer(
     try {
       // Keep edits serialized; an older animation frame must never overwrite
       // a newer tool event or the completed answer.
-      await deps.transport.editText(turn.chatId, turn.replaceMessageId!, html);
+      // The old HTML-only live HUD cannot render larger headings. Rich
+      // Markdown uses native level-two headings and <details>, matching the
+      // Telegram rendering capability already used for rich final responses.
+      // The existing compact HTML card remains the compatibility fallback.
+      const rich = formatVenomRichLivePanel(progress.operations, theme, {
+        title: header, status, pulse: frame.pulse, section,
+        transmission: venomTransmissionTitle(theme), objective,
+        model: telemetryModel, metrics: telemetryMetrics,
+      });
+      await deps.transport.editText(turn.chatId, turn.replaceMessageId!, html, rich);
     } catch (err) {
       renderLog.debug("progress edit failed", { err });
     } finally {

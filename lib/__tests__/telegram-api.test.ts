@@ -377,6 +377,52 @@ describe("createTelegramTransport — Rich Messages (native Markdown tables)", (
     });
   });
 
+  it("creates a Rich status message and edits that same message with Rich Markdown", async () => {
+    const calls: Array<{ method: string; body: Record<string, unknown> }> = [];
+    globalThis.fetch = vi.fn(async (url: string, init: RequestInit) => {
+      calls.push({ method: String(url).split("/").pop()!, body: JSON.parse(init.body as string) });
+      return telegramResponse(true, { message_id: 31 });
+    }) as unknown as FetchImpl;
+    const { transport } = makeTransport();
+    const initial = await transport.sendText(42, "<b>VENOM</b>", undefined, 12,
+      "**VENOM**\n\n## SYMBIOTE ACTIVITY\n\n- Awaiting target");
+    await transport.editText(42, initial[0].message_id, "<b>VENOM</b>\n<b>HUNT ACTIVE</b>",
+      "**VENOM**\n\n## SYMBIOTE ACTIVITY\n\n- **EXEC · ACTIVE**");
+    expect(calls.map(c => c.method)).toEqual(["sendRichMessage", "editMessageText"]);
+    expect(calls[0].body.rich_message).toEqual({ markdown: "**VENOM**\n\n## SYMBIOTE ACTIVITY\n\n- Awaiting target" });
+    expect(calls[1].body.message_id).toBe(31);
+    expect(calls[1].body.rich_message).toEqual({ markdown: "**VENOM**\n\n## SYMBIOTE ACTIVITY\n\n- **EXEC · ACTIVE**" });
+    expect(calls.every(c => c.body.parse_mode === undefined)).toBe(true);
+  });
+
+  it("does not downgrade to HTML on a repeated Rich animation frame", async () => {
+    const methods: string[] = [];
+    globalThis.fetch = vi.fn(async (url: string) => {
+      methods.push(String(url).split("/").pop()!);
+      return methods.length === 1
+        ? telegramResponse(false, undefined, "Bad Request: message is not modified")
+        : telegramResponse(true, { message_id: 42 });
+    }) as unknown as FetchImpl;
+    const { transport } = makeTransport();
+    await transport.editText(42, 31, "<b>Fallback</b>", "## SYMBIOTE ACTIVITY");
+    expect(methods).toEqual(["editMessageText"]);
+  });
+
+  it("does not disable all Rich Messages after an edit-only content rejection", async () => {
+    const calls: string[] = [];
+    globalThis.fetch = vi.fn(async (url: string) => {
+      const method = String(url).split("/").pop()!;
+      calls.push(method);
+      return calls.length === 1
+        ? telegramResponse(false, undefined, "Bad Request: message text is empty")
+        : telegramResponse(true, { message_id: 44 });
+    }) as unknown as FetchImpl;
+    const { transport } = makeTransport();
+    await transport.editText(42, 30, "<b>Fallback</b>", "## VENOM");
+    await transport.sendText(42, "<b>VENOM</b>", undefined, undefined, "## VENOM");
+    expect(calls).toEqual(["editMessageText", "editMessageText", "sendRichMessage"]);
+  });
+
   it("falls back to the HTML edit when the Rich edit is rejected", async () => {
     const calls: Array<{ url: string; body: Record<string, unknown> }> = [];
     const stub = vi.fn(async (url: string, init: RequestInit) => {

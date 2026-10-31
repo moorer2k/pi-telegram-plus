@@ -387,6 +387,46 @@ export function formatVenomLiveOperations(
     history + "</blockquote>";
 }
 
+/** Telegram Rich Messages render actual level-2 headings and native <details>.
+ * The ordinary HTML HUD remains the fallback for Bot API servers without Rich.
+ * Never interpolate unescaped tool contents into Markdown or HTML.
+ */
+export function formatVenomRichLivePanel(
+  operations: readonly VenomLiveOperation[],
+  options: VenomThemeOptions | undefined,
+  meta: { title: string; status: string; pulse: string; section: string; transmission: string; objective: string; model: string; metrics: string },
+): string {
+  const escaped = (input: string): string => input.replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/([\\*_~\`#[\]()!|])/g, "\\$1").replace(/\r?\n/g, " ");
+  const count = venomThemeNumber(options?.visibleOperations, 3, 1, 12);
+  const recent = operations.slice(-count);
+  const older = operations.slice(0, -count);
+  const line = (op: VenomLiveOperation): string => {
+    const tag = op.tag.replace(/[^A-Z0-9_-]/gi, "").slice(0, 10).toUpperCase() || "TRACE";
+    const duration = op.state !== "running" && op.finishedAt !== undefined
+      ? " " + (Math.max(0, op.finishedAt - op.startedAt) / 1000).toFixed(1) + "s" : "";
+    const state = options?.showOperationStates === false ? "" : " · " + op.state.toUpperCase() + duration;
+    const detail = (op.detail || op.tool).replace(/\s+/g, " ").slice(0, 82);
+    return "- **" + tag + escaped(state) + "**\n  " + escaped(detail);
+  };
+  const slots = [...recent.map(line)];
+  if (options?.fixedOperationRows !== false) {
+    for (let i = slots.length; i < count; i++) slots.push("- **TRACE · IDLE**\n  awaiting operation");
+  }
+  if (!slots.length) slots.push("- Awaiting target");
+  const history = options?.collapseOperations === "off" || !older.length ? "" :
+    "\n\n<details>\n<summary>" + older.length + " earlier traces</summary>\n\n" +
+    older.slice(-16).map(op => "- " + escaped(op.tag + " · " + op.state + " · " + op.detail.slice(0, 65))).join("\n") +
+    "\n\n</details>";
+  return "**" + escaped(meta.title) + "**\n\n" +
+    escaped(meta.status) + "\n\n" +
+    (options?.showPulse === false ? "" : "\`" + (meta.pulse || "▱▱▱▱▱▱") + "\`\n\n") +
+    "## " + escaped(meta.section) + "\n\n" + slots.join("\n") + history +
+    (options?.showObjective === false ? "" :
+      "\n\n## " + escaped(meta.transmission) + "\n\n" + escaped(meta.objective)) +
+    "\n\n" + escaped(meta.model) + "\n\n" + escaped(meta.metrics);
+}
+
 export function formatVenomOperationState(completed: number, running: number, failed: number): string {
   return [completed + " done", running + " running", failed + " failed"].join(" · ");
 }

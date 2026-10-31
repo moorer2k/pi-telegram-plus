@@ -1102,7 +1102,13 @@ export function createTelegramController(deps: {
       // Ordinary text messages have no replaceMessageId. Create a Telegram
       // status message first and use that ID for every progress edit.
       if (deps.getConfig?.().tool === "progress" && turn.replaceMessageId === undefined) {
-        const sent = await deps.transport.sendText(chatId, "<b>◐ VENOM · Starting…</b>", messageThreadId, sourceMessageId);
+        const sent = await deps.transport.sendText(
+          chatId,
+          "<b>VENOM // LETHAL PROTECTOR</b>\n<b>LINK ESTABLISHED</b>",
+          messageThreadId,
+          sourceMessageId,
+          "**VENOM // LETHAL PROTECTOR**\n\nLINK ESTABLISHED\n\n`▱▱▱▱▱▱`\n\n## SYMBIOTE ACTIVITY\n\n- Awaiting target",
+        );
         turn.replaceMessageId = sent[0]?.message_id;
       }
       await runWithTelegramTurn(turn, () => runWithTelegramUi({
@@ -1164,7 +1170,13 @@ export function createTelegramController(deps: {
         const telegramUi = deps.ui.create(chatId, messageThreadId, sourceMessageId);
         try {
           if (deps.getConfig?.().tool === "progress" && turn.replaceMessageId === undefined) {
-            const sent = await deps.transport.sendText(chatId, "<b>◐ VENOM · Starting…</b>", messageThreadId, sourceMessageId);
+            const sent = await deps.transport.sendText(
+          chatId,
+          "<b>VENOM // LETHAL PROTECTOR</b>\n<b>LINK ESTABLISHED</b>",
+          messageThreadId,
+          sourceMessageId,
+          "**VENOM // LETHAL PROTECTOR**\n\nLINK ESTABLISHED\n\n`▱▱▱▱▱▱`\n\n## SYMBIOTE ACTIVITY\n\n- Awaiting target",
+        );
             turn.replaceMessageId = sent[0]?.message_id;
           }
           await runWithTelegramTurn(turn, () => runWithTelegramUi({
