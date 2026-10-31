@@ -272,3 +272,19 @@ describe("native Markdown client regressions", () => {
     expect(normalizeRichMathDelimiters(source)).toBe(source);
   });
 });
+
+describe("multiline math client regressions", () => {
+  it("converts complete multiline display math", () => {
+    const input = String.raw`\\[
+\\int_0^\\infty e^{-x^2} dx
+\\]`;
+    expect(normalizeRichMathDelimiters(input)).toBe("$$\n\\\\int_0^\\\\infty e^{-x^2} dx\n$$");
+  });
+  it("leaves an unmatched display opener unchanged", () => {
+    expect(normalizeRichMathDelimiters(String.raw`\\[unfinished`)).toBe(String.raw`\\[unfinished`);
+  });
+  it("does not convert math in fenced code", () => {
+    const input = ["```latex", String.raw`\\[x\\]`, "```"].join("\n");
+    expect(normalizeRichMathDelimiters(input)).toBe(input);
+  });
+});
