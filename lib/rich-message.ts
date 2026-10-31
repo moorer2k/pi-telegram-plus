@@ -12,7 +12,7 @@
  * for the rich path and converts it. Everything that does not qualify keeps the
  * existing HTML pipeline, so no content depends on the newer API.
  */
-import { hasGfmTable, protectPseudoTables } from "./markdown.ts";
+import { hasGfmTable, normalizeFlattenedTables, protectPseudoTables } from "./markdown.ts";
 
 /**
  * Conservative Rich Message text budget. Telegram allows roughly 32k characters
@@ -47,9 +47,10 @@ function hasBalancedFences(markdown: string): boolean {
  * separator row) are fenced first so they keep their monospace alignment.
  */
 export function richMarkdownForTables(markdown: string): string | undefined {
-  if (!markdown.trim() || !hasGfmTable(markdown)) return undefined;
-  if (!hasBalancedFences(markdown)) return undefined;
-  const rich = escapeRichMarkdown(protectPseudoTables(markdown));
+  const normalized = normalizeFlattenedTables(markdown);
+  if (!normalized.trim() || !hasGfmTable(normalized)) return undefined;
+  if (!hasBalancedFences(normalized)) return undefined;
+  const rich = escapeRichMarkdown(protectPseudoTables(normalized));
   if (Array.from(rich).length > TELEGRAM_RICH_TEXT_LIMIT) return undefined;
   return rich;
 }

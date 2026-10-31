@@ -204,6 +204,53 @@ function fenceMarker(line: string): string {
 }
 
 /**
+ * Recover a GFM table that an LLM compressed onto one logical line.
+ *
+ * Example: "Forecast: | Day | High | | --- | --- | | Fri | 52 |"
+ * becomes a regular three-line table after the prefix. Do not invent tables:
+ * require >=2 columns, a full separator row of matching width and >=1 data
+ * row with exactly the same number of cells. Never modify fenced code.
+ */
+export function normalizeFlattenedTables(markdown: string): string {
+  const lines = markdown.split("\n");
+  const output: string[] = [];
+  let inFence = false;
+  let fenceChar = "";
+  for (const line of lines) {
+    const fence = fenceMarker(line);
+    if (fence) {
+      if (!inFence) { inFence = true; fenceChar = fence; }
+      else if (fence === fenceChar) { inFence = false; fenceChar = ""; }
+      output.push(line);
+      continue;
+    }
+    if (inFence || !line.includes("|")) { output.push(line); continue; }
+    const firstPipe = line.indexOf("|");
+    const prefix = line.slice(0, firstPipe).trim();
+    // Avoid interpreting ordinary prose containing several pipes as a table.
+    if (prefix.length > 160 || prefix.includes("\`")) { output.push(line); continue; }
+    const cells = line.slice(firstPipe + 1).split("|").map(cell => cell.trim()).filter(Boolean);
+    let width = 0;
+    for (let n = 2; n <= 6; n++) {
+      const separator = cells.slice(n, 2 * n);
+      const remaining = cells.length - 2 * n;
+      if (remaining < n || remaining % n !== 0 || separator.length !== n) continue;
+      if (cells.slice(0, n).some(cell => /^:?-{3,}:?$/.test(cell))) continue;
+      if (separator.every(cell => /^:?-{3,}:?$/.test(cell))) { width = n; break; }
+    }
+    if (!width) { output.push(line); continue; }
+    if (prefix) output.push(prefix, "");
+    const row = (items: string[]) => "| " + items.join(" | ") + " |";
+    output.push(row(cells.slice(0, width)));
+    output.push(row(cells.slice(width, width * 2)));
+    for (let at = width * 2; at < cells.length; at += width) {
+      output.push(row(cells.slice(at, at + width)));
+    }
+  }
+  return output.join("\n");
+}
+
+/**
  * True when `markdown` contains a real GFM table — a row containing a pipe
  * followed by a `| --- |` separator — outside code fences.
  *
@@ -502,7 +549,7 @@ export function markdownToTelegramHtml(markdown: string): string {
   // marked renders them as <pre><code> — preserving column alignment in
   // Telegram's monospace font instead of mangling pipes in a proportional-font
   // paragraph. Real markdown tables (with a separator) are left for marked.
-  const protected_ = protectPseudoTables(markdown);
+  const protected_ = protectPseudoTables(normalizeFlattenedTables(markdown));
   return (marked.parse(protected_, { async: false }) as string).replace(/\n+$/, "");
 }
 
