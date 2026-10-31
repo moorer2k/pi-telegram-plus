@@ -278,6 +278,8 @@ export function registerTelegramRenderer(
   let draftLastText = "";
   let draftBusy = false;
   let draftEnabled = true;
+  let draftPartial = "";
+  let draftLastAt = 0;
   let progressTimer: ReturnType<typeof setInterval> | undefined;
   const stopProgressTimer = () => {
     if (progressTimer !== undefined) clearInterval(progressTimer);
@@ -530,6 +532,8 @@ export function registerTelegramRenderer(
       draftLastText = "";
       draftBusy = false;
       draftEnabled = true;
+      draftPartial = "";
+      draftLastAt = 0;
       // Telegram has no continually animated text format. Edit the existing
       // message on a bounded timer, including while a tool is blocking.
       if (progress.target) {
@@ -653,6 +657,40 @@ ${partial}`);
     } catch (err) { renderLog.warn("tool-result image upload failed", { err }); }
   });
 
+  // Pi emits text deltas before message_end. Preview only complete Markdown
+  // constructs, and leave the final authoritative send to message_end.
+  pi.on("message_update", async (event) => {
+    try {
+      if (!progressMode() || !progress.target || progressTarget() !== progress.target) return;
+      if (!draftEnabled || draftBusy || !deps.transport.sendRichDraft) return;
+      const update = event as unknown as {
+        message?: AnyMessage;
+        assistantMessageEvent?: { type?: string; delta?: string };
+      };
+      if (update.message?.role !== "assistant" || update.assistantMessageEvent?.type !== "text_delta") return;
+      const delta = update.assistantMessageEvent.delta;
+      if (!delta) return;
+      draftPartial += delta;
+      const now = Date.now();
+      if (now - draftLastAt < 1200) return;
+      const turn = deps.getActiveTurn();
+      if (!turn) return;
+      const candidate = [ ...progress.messages, draftPartial ].join("\n\n");
+      const rich = richMarkdownForResponse(candidate);
+      if (!rich || rich === draftLastText) return;
+      draftBusy = true;
+      draftLastAt = now;
+      try {
+        if (await deps.transport.sendRichDraft(turn.chatId, draftId, rich, turn.messageThreadId)) {
+          draftLastText = rich;
+        } else draftEnabled = false;
+      } catch (err) {
+        draftEnabled = false;
+        renderLog.debug("Rich draft streaming disabled after failure", { err });
+      } finally { draftBusy = false; }
+    } catch (err) { renderLog.debug("Rich draft streaming error", { err }); }
+  });
+
   pi.on("message_end", async (event) => {
     try {
     const message = event.message as AnyMessage;
@@ -683,6 +721,7 @@ ${partial}`);
       const messageText = body.trim();
       progress.messages = appendProgressMessage(progress.messages, messageText);
       progress.latest = messageText;
+      draftPartial = "";
       // Drafts are best-effort, never overlapping, and scoped to this agent run.
       const turnForDraft = deps.getActiveTurn();
       if (turnForDraft && draftEnabled && !draftBusy && deps.transport.sendRichDraft) {
