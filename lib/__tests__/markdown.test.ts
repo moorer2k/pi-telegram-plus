@@ -399,3 +399,19 @@ describe("markdownToTelegramHtml", () => {
     expect(result).not.toMatch(/<blockquote><i>/);
   });
 });
+
+describe("Telegram list renderer regression", () => {
+  it("retains unordered list items and following text", () => {
+    const html = markdownToTelegramHtml("Extensions (the real ones):\n\n- pi-hermes-memory\n- pi-telegram-plus\n\nSupporting harness:");
+    expect(html).toContain("pi-hermes-memory");
+    expect(html).toContain("pi-telegram-plus");
+    expect(html).toContain("Supporting harness:");
+    expect(html).toContain("- ");
+  });
+
+  it("retains ordered list items", () => {
+    const html = markdownToTelegramHtml("1. Memory\n2. Telegram");
+    expect(html).toContain("1. Memory");
+    expect(html).toContain("2. Telegram");
+  });
+});
