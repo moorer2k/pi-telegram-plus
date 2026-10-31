@@ -344,3 +344,14 @@ Use `/tg → Config → Trusted group participants` to **list, add, or remove** 
 The optional `trustedGroupMembers` setting begins unset. Group allowlisting does not grant bot-owner, administrative, shell, or private-chat permissions. It permits group mentions when group access is set to `owner-mentions` or `public-mentions`; `disabled` still blocks group messages.
 
 Trusted prompts retain the restricted group-message path. **Security boundary:** a recognized identity is not a separate session. Shared Pi session context is not technically isolated from group prompts; do not treat allowlisting as data isolation.
+
+### Self-hosted Telegram Bot API `--local` file downloads
+
+When `getFile` returns an absolute `file_path` from a self-hosted Telegram Bot API server running in `--local` mode, the bridge reads that path directly from the local filesystem rather than requesting `/file/bot.../<absolute-path>` over HTTP (which may return 404).
+
+- Configure `PI_TELEGRAM_API_BASE` or the project `apiBase` to a loopback endpoint such as `http://127.0.0.1:8081` on the **same machine** as the Bot API server.
+- Ensure the Pi-Bolt service account can read the files returned by Telegram's `getFile`.
+- For relative paths, downloads still use the Bot API's HTTP file endpoint.
+- Absolute filesystem paths from non-loopback API endpoints are rejected rather than read as arbitrary local files.
+
+No local source patches, Git divergence, or GitHub credentials are necessary after this fix is merged to `master` and Pi-Bolt has been updated. The old update menu still requires a clean `master` checkout.
