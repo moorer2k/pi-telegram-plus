@@ -650,9 +650,8 @@ describe("createTelegramController media message behavior", () => {
     expect(sendText).not.toHaveBeenCalledWith(999, expect.stringContaining("could not be delivered"));
   });
 
-  it("survives a goal continuation starting while input hooks are being dispatched", async () => {
+  it("steers a Telegram-owned goal continuation even when streaming state changes during dispatch", async () => {
     let streamingReads = 0;
-    let idleReads = 0;
     let session: any;
     const prompt = vi.fn(async (_text: string, options?: { streamingBehavior?: string }) => {
       // Mirrors AgentSession.prompt(): isStreaming is checked again only after
@@ -670,9 +669,9 @@ describe("createTelegramController media message behavior", () => {
         setUIContext: () => undefined,
         getCommand: () => undefined,
         createCommandContext: () => ({
-          // The goal continuation starts after the first idle probe: the main
-          // loop flips to busy while the message is held for settlement.
-          isIdle: () => idleReads++ < 2,
+          // The main turn is already active even when the streaming getter
+          // initially lags behind its state.
+          isIdle: () => false,
           waitForIdle: async () => undefined,
         }) as any,
       },
