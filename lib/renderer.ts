@@ -9,7 +9,7 @@ import type { TelegramConfig, TelegramRenderLevel, TelegramTransport, TelegramTu
 import type { SecretStore } from "./tui/secrets.ts";
 import { RENDER_LEVELS } from "./types.ts";
 import { log } from "./logger.ts";
-import { venomActivity, venomThemeFrame, venomThemeLabel, venomThemeNumber, venomThemeText, formatVenomContextUsage, formatVenomFooter, VENOM_DEFAULTS, venomSectionTitle, venomTransmissionTitle, venomToolLine, venomCompletionLabel, formatVenomTelemetry, formatVenomActivityHistory, formatVenomOperationState, type VenomActivity } from "./venom-theme.ts";
+import { venomActivity, venomThemeFrame, venomThemeLabel, venomThemeNumber, venomThemeText, formatVenomContextUsage, formatVenomFooter, VENOM_DEFAULTS, venomSectionTitle, venomTransmissionTitle, venomCompletionLabel, formatVenomLiveOperations, venomToolTag, type VenomLiveOperation, type VenomActivity } from "./venom-theme.ts";
 
 const renderLog = log.child("renderer");
 
@@ -268,7 +268,7 @@ export function registerTelegramRenderer(
   const toolUpdateAt = new Map<string, number>();
   const toolArgs = new Map<string, unknown>();
   const progress = {
-    target: "", lines: [] as string[], latest: "", messages: [] as string[],
+    target: "", operations: [] as VenomLiveOperation[], latest: "", messages: [] as string[],
     count: 0, lastEdit: 0, frame: 0, editing: false,
     activity: "awakening" as VenomActivity, started: 0,
     running: new Set<string>(), completed: 0, failed: 0,
@@ -304,34 +304,31 @@ export function registerTelegramRenderer(
     const section = venomSectionTitle(theme);
     const style = theme?.preset;
     const status = venomThemeLabel(progress.activity, theme);
-    const activity = formatVenomActivityHistory(progress.lines, escapeHtml, theme);
-    const showStates = theme?.showOperationStates !== false;
-    // Counts appear once. When state counts are shown, suppress the total
-    // operations figure in telemetry rather than duplicating it.
-    const footerOptions = { ...theme, showOperations: !showStates && theme?.showOperations !== false };
-    const footer = theme?.footerDensity === "compact"
-      ? formatVenomFooter(progress.count, Date.now() - progress.started, context, model, footerOptions)
-      : formatVenomTelemetry(progress.count, Date.now() - progress.started, context, model, footerOptions);
+    const activity = formatVenomLiveOperations(progress.operations, escapeHtml, theme);
+    // The individual trace rows now own operation lifecycle state. Count it only
+    // once, in the trace, rather than duplicating totals in the footer.
+    const footerOptions = { ...theme, showOperations: false };
+    const footer = formatVenomFooter(progress.count, Date.now() - progress.started, context, model, footerOptions);
     const objective = progress.latest
       ? progress.latest.replace(/\s+/g, " ").trim().slice(0, 48)
-      : "Working on the current request";
+      : "Standing by for next signal";
     const role = style === "classified" ? "[ CLASSIFIED // SYMBIOTE NETWORK ]\n" :
       style === "predator-terminal" ? "[ PREDATOR TERMINAL ]\n" :
       style === "blacksite" ? "[ BLACKSITE ]\n" : "";
-    // Stable message geometry: title, status, pulse, activity and footer never
-    // share a line. No moving spinner glyph at the beginning of the heading.
-    // Exactly X rows are reserved by formatVenomActivityHistory.
+    // Keep the symbiote pulse: fixed-width frames on their own line with no
+    // changing label beside them. Stable title, status, trace, and footer slots.
+    const pulse = theme?.showPulse === false ? "" :
+      "<code>" + (frame.pulse || "▱▱▱▱▱▱") + "</code>\n";
     const html = (role ? "<code>" + escapeHtml(role.trim()) + "</code>\n" : "") +
       "<b>" + escapeHtml(header) + "</b>\n" +
       "<b>" + escapeHtml(status) + "</b>\n" +
-      (theme?.showPulse === false || !frame.pulse ? "<code>      </code>" : "<code>" + frame.pulse + "</code>") +
-      "\n\n<b>" + escapeHtml(section) + "</b>\n" +
-      (showStates ? "<i>" + escapeHtml(formatVenomOperationState(progress.completed, progress.running.size, progress.failed)) + "</i>\n" : "") +
+      pulse +
+      "\n<b>" + escapeHtml(section) + "</b>\n" +
       activity +
       (theme?.showObjective === false ? "" :
         "\n\n<b>" + escapeHtml(venomTransmissionTitle(theme)) + "</b>\n" +
         "<i>" + escapeHtml(objective) + "</i>") +
-      (footer ? "\n\n<code>" + escapeHtml(footer).replace(/\n/g, "</code>\n<code>") + "</code>" : "");
+      (footer ? "\n\n<code>" + escapeHtml(footer.slice(0, 120)) + "</code>" : "");
     try {
       // Keep edits serialized; an older animation frame must never overwrite
       // a newer tool event or the completed answer.
@@ -342,11 +339,25 @@ export function registerTelegramRenderer(
       progress.editing = false;
     }
   };
-  const addProgress = async (line: string) => {
+  const recordProgressStart = async (id: string, tool: string, args: unknown, brief: string) => {
     if (!progressMode() || !progress.target || progressTarget() !== progress.target) return;
-    const safe = redactFor(deps.getActiveTurn(), line).replace(/\s+/g, " ").slice(0, 150);
-    if (safe !== progress.lines.at(-1)) progress.lines.push(safe);
+    const detail = redactFor(deps.getActiveTurn(), brief).replace(/\s+/g, " ").trim().slice(0, 160);
+    progress.operations.push({ id, tool, tag: venomToolTag(tool, args), detail, state: "running", startedAt: Date.now() });
+    // Keep total history bounded without discarding the newest displayed rows.
+    if (progress.operations.length > 120) progress.operations.splice(0, progress.operations.length - 120);
     await updateProgress();
+  };
+  const recordProgressEnd = async (id: string, isError: boolean, errorBrief?: string) => {
+    if (!progressMode() || !progress.target || progressTarget() !== progress.target) return;
+    const operation = progress.operations.find(op => op.id === id);
+    if (!operation) return;
+    operation.state = isError ? "failed" : "done";
+    operation.finishedAt = Date.now();
+    if (isError) {
+      operation.tag = "ERROR";
+      if (errorBrief) operation.detail = redactFor(deps.getActiveTurn(), errorBrief).replace(/\s+/g, " ").slice(0, 160);
+    }
+    await updateProgress(true);
   };
 
   /** §4.7.4: replace this chat's tracked secrets before any escaping happens. */
@@ -482,7 +493,7 @@ export function registerTelegramRenderer(
     stopProgressTimer();
     if (progressMode()) {
       progress.target = progressTarget();
-      progress.lines = [];
+      progress.operations = [];
       progress.latest = "";
       progress.messages = [];
       progress.count = 0;
@@ -533,7 +544,7 @@ export function registerTelegramRenderer(
       progress.activity = venomActivity(event.toolName, event.args);
       toolArgs.set(event.toolCallId, event.args);
       const brief = formatToolBrief(event.toolName, event.args).replace(/^🔧 /, "");
-      await addProgress(venomToolLine(event.toolName, event.args, brief, deps.getConfig().venomTheme));
+      await recordProgressStart(event.toolCallId, event.toolName, event.args, brief);
       return;
     }
     toolArgs.set(event.toolCallId, event.args);
@@ -581,12 +592,9 @@ ${partial}`);
         if (event.isError) progress.failed++;
         else progress.completed++;
       }
-      if (event.isError) {
-        progress.activity = "adapting";
-        const failure = formatToolFailureBrief(event.toolName, event.result, args);
-        await addProgress(venomToolLine(event.toolName, args, failure, deps.getConfig().venomTheme, true));
-        await updateProgress(true);
-      }
+      if (event.isError) progress.activity = "adapting";
+      const failure = event.isError ? formatToolFailureBrief(event.toolName, event.result, args) : undefined;
+      await recordProgressEnd(event.toolCallId, !!event.isError, failure);
       return;
     }
     if (level === "hidden") return;
