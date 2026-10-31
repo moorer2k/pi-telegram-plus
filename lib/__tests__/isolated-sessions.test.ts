@@ -66,4 +66,17 @@ describe("isolated session lifecycle", () => {
     expect(disposeSession).toHaveBeenCalledTimes(2);
   });
 
+  it("rejects a factory that aliases the same session across chats", async () => {
+    const shared = { id: 1 };
+    const disposeSession = vi.fn(async () => {});
+    const registry = new IsolatedSessionRegistry(async () => shared, disposeSession);
+    const owner = await registry.get({ chatId: 1 });
+    await expect(registry.get({ chatId: 2 })).rejects.toThrow("already owned");
+    expect(registry.list()).toEqual([{ chatId: 1 }]);
+    expect(owner.session).toBe(shared);
+    expect(disposeSession).not.toHaveBeenCalled();
+    await registry.dispose();
+    expect(disposeSession).toHaveBeenCalledTimes(1);
+  });
+
 });
