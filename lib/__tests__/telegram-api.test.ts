@@ -95,6 +95,34 @@ describe("unsupported rich edit capability", () => {
   });
 });
 
+describe("native Rich draft transport", () => {
+  let priorFetch: FetchImpl;
+  beforeEach(() => { priorFetch = globalThis.fetch; __resetRichMessagesForTests(); });
+  afterEach(() => { globalThis.fetch = priorFetch; __resetRichMessagesForTests(); });
+
+  it("sends a Rich draft with topic routing and a stable draft identifier", async () => {
+    const calls: Array<{ method: string; body: Record<string, unknown> }> = [];
+    globalThis.fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      calls.push({ method: String(input).split("/").pop()!, body: JSON.parse(String(init?.body)) });
+      return telegramResponse(true, true);
+    }) as unknown as FetchImpl;
+    const { transport } = makeTransport();
+    expect(await transport.sendRichDraft!(123, 77, "**Working**", 456)).toBe(true);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
+      method: "sendRichMessageDraft",
+      body: { chat_id: 123, draft_id: 77, message_thread_id: 456,
+        rich_message: { markdown: "**Working**", skip_entity_detection: true } },
+    });
+  });
+
+  it("returns false when the draft API rejects content", async () => {
+    globalThis.fetch = vi.fn(async () => telegramResponse(false, false, "Bad Request: can't parse entities")) as unknown as FetchImpl;
+    const { transport } = makeTransport();
+    expect(await transport.sendRichDraft!(123, 77, "**unfinished")).toBe(false);
+  });
+});
+
 describe("local Bot API attachment downloads", () => {
   let priorFetch: FetchImpl;
   beforeEach(() => { priorFetch = globalThis.fetch; });
