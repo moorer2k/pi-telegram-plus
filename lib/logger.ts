@@ -98,10 +98,39 @@ function safeStringify(record: Record<string, unknown>): string {
   }
 }
 
+/** Avoid writing user prompts, credentials or message bodies to diagnostic files. */
+const SENSITIVE_FIELD = /(?:token|secret|password|authorization|api[_-]?key|cookie|prompt|message[_-]?text|body|payload|command|\btext\b)/i;
+function sanitizeLogValue(value: unknown, depth = 0): unknown {
+  if (depth > 6) return "[nested]";
+  if (value instanceof Error) return {
+    name: value.name,
+    message: redactSecrets(value.message),
+    stack: value.stack ? redactSecrets(value.stack) : undefined,
+  };
+  if (typeof value === "string") return redactSecrets(value);
+  if (Array.isArray(value)) return value.map((item) => sanitizeLogValue(item, depth + 1));
+  if (value && typeof value === "object") {
+    const result: Record<string, unknown> = {};
+    for (const [key, item] of Object.entries(value)) {
+      result[key] = SENSITIVE_FIELD.test(key) ? "[redacted]" : sanitizeLogValue(item, depth + 1);
+    }
+    return result;
+  }
+  return value;
+}
+function redactSecrets(value: string): string {
+  return value
+    .replace(/\b\d{8,12}:[A-Za-z0-9_-]{30,}\b/g, "[telegram-token]")
+    .replace(/\b(?:sk|ghp|github_pat|xoxb)-[A-Za-z0-9_-]{16,}\b/g, "[credential]")
+    .replace(/(Bearer\s+)[^\s"']+/gi, "$1[redacted]");
+}
+
 function ensureFieldSafety(fields: LogFields | undefined): LogFields {
   if (!fields) return {};
   const out: LogFields = {};
-  for (const [k, v] of Object.entries(fields)) {
+  for (const [k, original] of Object.entries(fields)) {
+    if (SENSITIVE_FIELD.test(k)) { out[k] = "[redacted]"; continue; }
+    const v = sanitizeLogValue(original);
     if (typeof v === "bigint") out[k] = v.toString();
     else if (typeof v === "symbol") out[k] = v.toString();
     else if (typeof v === "function") out[k] = `[function ${v.name || "anonymous"}]`;
