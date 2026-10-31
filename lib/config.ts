@@ -280,6 +280,7 @@ export function materializeTelegramConfig(
     if (binding.groupJoinAlerts !== undefined) config.groupJoinAlerts = binding.groupJoinAlerts;
     if (binding.linkPreviews !== undefined) config.linkPreviews = binding.linkPreviews;
     if (binding.venomTheme !== undefined) config.venomTheme = binding.venomTheme;
+    if (binding.venomRestartPhrases !== undefined) config.venomRestartPhrases = binding.venomRestartPhrases;
     if (binding.retryCount !== undefined) config.retryCount = binding.retryCount;
     if (binding.bashConfirm !== undefined) config.bashConfirm = binding.bashConfirm;
     if (binding.lastUpdateId !== undefined) config.lastUpdateId = binding.lastUpdateId;
@@ -352,6 +353,7 @@ export async function persistProjectRuntimeState(
     if (config.groupJoinAlerts !== undefined) binding.groupJoinAlerts = config.groupJoinAlerts;
     if (config.linkPreviews !== undefined) binding.linkPreviews = config.linkPreviews;
     if (config.venomTheme !== undefined) binding.venomTheme = config.venomTheme;
+    if (config.venomRestartPhrases !== undefined) binding.venomRestartPhrases = config.venomRestartPhrases;
     if (config.retryCount !== undefined) binding.retryCount = config.retryCount;
     if (config.bashConfirm !== undefined) binding.bashConfirm = config.bashConfirm;
 
@@ -402,6 +404,7 @@ export function preserveInMemoryRuntimeState(
     ...(persisted.groupJoinAlerts === undefined && memory.groupJoinAlerts !== undefined ? { groupJoinAlerts: memory.groupJoinAlerts } : {}),
     ...(persisted.linkPreviews === undefined && memory.linkPreviews !== undefined ? { linkPreviews: memory.linkPreviews } : {}),
     ...(persisted.venomTheme === undefined && memory.venomTheme !== undefined ? { venomTheme: memory.venomTheme } : {}),
+    ...(persisted.venomRestartPhrases === undefined && memory.venomRestartPhrases !== undefined ? { venomRestartPhrases: memory.venomRestartPhrases } : {}),
     ...(persisted.retryCount === undefined && memory.retryCount !== undefined
       ? { retryCount: memory.retryCount }
       : {}),

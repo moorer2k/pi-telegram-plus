@@ -8,6 +8,12 @@ export const RENDER_LEVELS: readonly TelegramRenderLevel[] = ["hidden", "brief",
 export type TelegramGroupAccess = "disabled" | "owner-mentions" | "public-mentions";
 export type TelegramSessionIsolation = "shared" | "per-chat";
 
+/** Editable shutdown and startup phrase pools; absence means use bundled defaults. */
+export type VenomRestartPhrases = {
+  before?: string[];
+  after?: string[];
+};
+
 /** Optional project-local visual settings for the Venom progress card. */
 export type VenomThemeOptions = {
   /** Visual language preset; explicit text overrides still take precedence. */
@@ -74,6 +80,7 @@ export type ProjectTelegramBinding = {
   /** Enable expanded URL cards for new sends (off by default). */
   linkPreviews?: boolean;
   venomTheme?: VenomThemeOptions;
+  venomRestartPhrases?: VenomRestartPhrases;
   /** Per-project runtime pref: retries for failed Telegram API calls (0 = no retry, default 3). Edited via /tg → Config, never written to the registry. */
   retryCount?: number;
   /** Confirmation policy for Telegram-originated shell commands. Defaults to "dangerous". */
@@ -120,6 +127,7 @@ export type TelegramConfig = {
   groupJoinAlerts?: boolean;
   linkPreviews?: boolean;
   venomTheme?: VenomThemeOptions;
+  venomRestartPhrases?: VenomRestartPhrases;
   /** Number of retries for failed Telegram API calls (0 = no retry, default 3). */
   retryCount?: number;
   /** Confirmation policy for Telegram-originated shell commands. Defaults to "dangerous". */

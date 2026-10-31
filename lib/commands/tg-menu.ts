@@ -10,6 +10,10 @@ import type { BotRecord, BotRegistry, CapturedAgentSession, TelegramConfig } fro
 import { currentHostName } from "../tui/host.ts";
 import type { TuiHost } from "../tui-bridge.ts";
 import { configVenomThemeFlow } from "./tg-venom-theme.ts";
+import { configVenomPhrasesFlow } from "./tg-venom-phrases.ts";
+import { getCurrentTelegramTurn } from "../turn-context.ts";
+import { checkpointCurrentUpdateCursor } from "../polling.ts";
+import { updateAndRestartVenom, getMaintenanceService } from "../maintenance.ts";
 import { configToolFlow, configThinkingFlow, configRetryFlow, configBashFlow, configGroupAccessFlow, configSessionIsolationFlow, configGroupJoinAlertsFlow } from "./tg-config.ts";
 import { formatPairingInstructions } from "../pairing.ts";
 import { formatDebugReport } from "./info.ts";
@@ -45,6 +49,7 @@ const MAIN_MENU_OPTIONS = [
   "⚙️ Config",
   "🔄 Switch instance",
   "🛠 Debug info",
+  "Update & restart Pi-Bolt",
   "❌ Close",
 ] as const;
 
@@ -177,6 +182,35 @@ async function mainMenu(
     } else if (choice === "🔄 Switch instance") {
       if (await switchInstanceMenu(ui, switchDeps)) continue;
       return;
+    } else if (choice === "Update & restart Pi-Bolt") {
+      const turn = getCurrentTelegramTurn();
+      const ownerId = deps.getConfig().allowedUserId;
+      const botId = deps.getResolvedConfig()?.bot?.id;
+      if (!turn || ownerId === undefined || turn.chatId !== ownerId || !botId) {
+        ui.notify("Plugin maintenance is available only in the paired owner's private Telegram chat.", "error");
+        continue;
+      }
+      const service = getMaintenanceService();
+      if (!service) {
+        ui.notify("Automatic restart needs PI_TELEGRAM_RESTART_UNIT configured to the active Pi-Bolt systemd .service unit.", "error");
+        continue;
+      }
+      const confirmed = await ui.confirm(
+        "Update plugin and restart Pi-Bolt?",
+        "Fetch and fast-forward moorer2k/pi-telegram-plus master, then restart " + service.unit +
+        ". Active tasks will be interrupted. Continue?",
+      );
+      if (!confirmed) continue;
+      try {
+        // Checkpoint the Telegram callback before process termination.
+        await checkpointCurrentUpdateCursor();
+        await updateAndRestartVenom(turn.chatId, botId, deps.transport, deps.getConfig().venomRestartPhrases);
+        throw new MenuClosed();
+      } catch (error) {
+        if (error instanceof MenuClosed) throw error;
+        ui.notify("Venom update/restart failed: " + (error instanceof Error ? error.message : String(error)), "error");
+      }
+      continue;
     } else if (choice === "🛠 Debug info") {
       const session = sessionDeps?.getSession();
       if (session) {
@@ -439,6 +473,7 @@ export function buildConfigMenuOptions(
     `🔒 Chat sessions: ${config.sessionIsolation ?? "shared"}`,
     `🔔 Group join alerts: ${config.groupJoinAlerts === false ? "off" : "on"}`,
     "Venom appearance",
+    "Venom restart phrases",
     BACK_LABEL,
   ];
 }
@@ -477,6 +512,8 @@ async function configMenu(ui: MenuUi, configDeps: TgConfigDeps, sessionDeps?: Se
       await configGroupJoinAlertsFlow(ui, configDeps);
     } else if (choice === "Venom appearance") {
       await configVenomThemeFlow(ui, configDeps);
+    } else if (choice === "Venom restart phrases") {
+      await configVenomPhrasesFlow(ui, configDeps);
     }
   }
 }

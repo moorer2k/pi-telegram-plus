@@ -282,3 +282,43 @@ Common issues and diagnostic steps. The extension writes a structured JSON Lines
 - The bot registry lives in `~/.pi/agent/tg.json` (version 3). Project bindings live in `<project>/.pi/telegram.json`. After editing by hand, run `/reload` (or restart pi) so the extension re-reads config.
 - If the wrong bot responds, open `/tg` → **Project** to check the current binding, and change or remove the binding there to fall back to the default bot.
 - The v2 → v3 migration runs automatically on first read: global config becomes the default bot, workspaces become per-project `.pi/telegram.json` files with token dedup.
+
+---
+
+## Telegram update & restart (opt-in)
+
+The paired owner can open `/tg → Update & restart Pi-Bolt` to update the extension's **installed Git checkout** from `moorer2k/pi-telegram-plus` `master` and restart the **configured systemd service**. The menu works only in the owner's private chat and always asks for confirmation.
+
+The restart target is intentionally not accepted from Telegram or the project JSON configuration. Set these variables in the Pi-Bolt service environment:
+
+```ini
+Environment=PI_TELEGRAM_RESTART_UNIT=pi-bolt.service
+Environment=PI_TELEGRAM_RESTART_SCOPE=user
+```
+
+Replace `pi-bolt.service` with the **actual active service unit**. For a system service use `PI_TELEGRAM_RESTART_SCOPE=system`; the process must have permission to restart that service without interactive authentication. Use `systemctl --user edit <unit>` or `systemctl edit <unit>` where appropriate. Restart the service once after setting the variables.
+
+This option will refuse to run when the installed plugin is not a clean Git checkout of the expected fork, is not on `master`, or needs a non-fast-forward merge. It will not update other dependencies, apply local patches, install packages, or silently swap Git branches. The host must be supervised by systemd; a manual terminal launch cannot be safely auto-restarted by this feature.
+
+After confirmation Venom sends a random Lethal Protector shutdown phrase and the target Git commit before requesting the restart. The pending notification is stored in the Pi agent directory and survives process termination. Once the restarted process has resumed active Telegram polling, Venom sends one randomly selected return phrase and the installed commit. A restart that fails to resume polling cannot send a false success notice; inspect the systemd journal in that case. Pending notices expire after 15 minutes.
+
+This update mechanism does not run automatically on startup. No Telegram chat participant other than the paired owner can trigger it.
+
+### Customize Venom restart messages
+
+Use `/tg → Config → Venom restart phrases`. The menu has **Before restart** and **After restart** lists. Each list displays all configured phrases and allows **Add phrase**, selecting an existing phrase to **Delete this phrase** (with confirmation), and **Restore default phrases** (with confirmation).
+
+Five bundled phrases are initially available per stage. Settings are stored in the active project's `.pi/telegram.json` under `venomRestartPhrases.before` and `venomRestartPhrases.after`. Lists are independent and persist through plugin updates and Pi-Bolt restarts. Phrases are selected randomly for each stage. A list must retain at least one entry, with a maximum of 30 entries and 240 characters per phrase. Custom text is escaped for Telegram HTML output.
+
+Example optional settings:
+
+```json
+{
+  "venomRestartPhrases": {
+    "before": ["The symbiote is shedding its old skin. Stay close."],
+    "after": ["We are Venom. And we are back."]
+  }
+}
+```
+
+Absent phrase lists use the built-in five phrases, and resetting one list does not modify the other. No changes to the bot registry or credentials are needed.
