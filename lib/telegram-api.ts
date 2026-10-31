@@ -291,8 +291,7 @@ export function createTelegramTransport(
   const warnHtmlFallback = (label: string, err: unknown, preview: string) => {
     if (isNetworkError(err)) return;
     const reason = err instanceof Error ? err.message : String(err);
-    const snippet = preview.replace(/\s+/g, " ").slice(0, 120);
-    apiLog.warn(`HTML ${label} rejected; falling back to plain text`, { reason, snippet });
+    apiLog.warn(`HTML ${label} rejected; falling back to plain text`, { reason, payloadLength: preview.length });
   };
 
   /** A missing edit target is not a formatting or Rich capability failure. */
@@ -329,14 +328,17 @@ export function createTelegramTransport(
     delivery?: { maxAttempts?: number },
   ): Promise<TelegramSentMessage | undefined> => {
     try {
-      return await callApi<TelegramSentMessage>("sendRichMessage", {
+      apiLog.debug("Rich delivery attempt", { method: "sendRichMessage", markdownLength: markdown.length, hasThread: messageThreadId !== undefined });
+      const sent = await callApi<TelegramSentMessage>("sendRichMessage", {
         chat_id: chatId,
         rich_message: { markdown, skip_entity_detection: true },
         link_preview_options: { is_disabled: cfg().linkPreviews !== true },
         ...messageTargetFields(messageThreadId, replyToMessageId),
       }, undefined, lease, delivery);
+      apiLog.debug("Rich delivery succeeded", { method: "sendRichMessage" });
+      return sent;
     } catch (err) {
-      if (isNetworkError(err)) throw err;
+      if (isNetworkError(err)) { apiLog.warn("Rich delivery network failure", { method: "sendRichMessage", errorName: err instanceof Error ? err.name : "unknown" }); throw err; }
       noteRichFailure("sendRichMessage", err);
       return undefined;
     }
@@ -347,12 +349,14 @@ export function createTelegramTransport(
       if (!richMessagesAvailable || !markdown.trim()) return false;
       const lease = captureSendLease();
       try {
+        apiLog.debug("Rich draft attempt", { method: "sendRichMessageDraft", markdownLength: markdown.length, hasThread: messageThreadId !== undefined });
         await callApi("sendRichMessageDraft", {
           chat_id: chatId,
           draft_id: draftId,
           rich_message: { markdown, skip_entity_detection: true },
           ...(messageThreadId === undefined ? {} : { message_thread_id: messageThreadId }),
         }, undefined, lease, { maxAttempts: 1 });
+        apiLog.debug("Rich draft succeeded", { method: "sendRichMessageDraft" });
         return true;
       } catch (err) {
         if (err instanceof TelegramSendSuppressedError) throw err;
