@@ -30,7 +30,7 @@ export function renderVenomBlocks(blocks: readonly VenomBlock[]): string {
   return blocks.map(block => {
     if (block.kind === "heading") return "## " + escapeRich(block.value);
     if (block.kind === "code") return code(block.value);
-    if (block.kind === "operation") return "- " + code(block.command) + " · " + escapeRich(block.status);
+    if (block.kind === "operation") return "- " + code(block.command) + (block.status ? " · " + escapeRich(block.status) : "");
     if (block.kind === "text") {
       const value = escapeRich(block.value);
       return block.bold ? "**" + value + "**" : value;
