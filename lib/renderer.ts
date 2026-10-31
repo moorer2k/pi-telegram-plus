@@ -273,6 +273,11 @@ export function registerTelegramRenderer(
     activity: "awakening" as VenomActivity, started: 0,
     running: new Set<string>(), completed: 0, failed: 0,
   };
+  let draftSequence = 0;
+  let draftId = 0;
+  let draftLastText = "";
+  let draftBusy = false;
+  let draftEnabled = true;
   let progressTimer: ReturnType<typeof setInterval> | undefined;
   const stopProgressTimer = () => {
     if (progressTimer !== undefined) clearInterval(progressTimer);
@@ -521,6 +526,10 @@ export function registerTelegramRenderer(
       progress.failed = 0;
       progress.started = Date.now();
       progress.editing = false;
+      draftId = ++draftSequence;
+      draftLastText = "";
+      draftBusy = false;
+      draftEnabled = true;
       // Telegram has no continually animated text format. Edit the existing
       // message on a bounded timer, including while a tool is blocking.
       if (progress.target) {
@@ -674,22 +683,24 @@ ${partial}`);
       const messageText = body.trim();
       progress.messages = appendProgressMessage(progress.messages, messageText);
       progress.latest = messageText;
-      // Best-effort native draft preview. Never let a rejected draft interfere
-      // with the existing Venom HUD or final-message delivery.
+      // Drafts are best-effort, never overlapping, and scoped to this agent run.
       const turnForDraft = deps.getActiveTurn();
-      if (turnForDraft && deps.transport.sendRichDraft && progress.messages.length > 0) {
-        const draftText = progress.messages.join("\\n\\n");
+      if (turnForDraft && draftEnabled && !draftBusy && deps.transport.sendRichDraft) {
+        const draftText = progress.messages.join("\n\n");
         const nativeDraft = richMarkdownForResponse(draftText);
-        if (nativeDraft) {
+        if (nativeDraft && nativeDraft !== draftLastText) {
+          draftBusy = true;
           try {
-            await deps.transport.sendRichDraft(
-              turnForDraft.chatId,
-              Math.max(1, Math.abs(turnForDraft.replaceMessageId ?? 1)),
-              nativeDraft,
-              turnForDraft.messageThreadId,
+            const accepted = await deps.transport.sendRichDraft(
+              turnForDraft.chatId, draftId, nativeDraft, turnForDraft.messageThreadId,
             );
+            if (accepted) draftLastText = nativeDraft;
+            else draftEnabled = false;
           } catch (err) {
-            renderLog.debug("native Rich draft unavailable; Venom HUD remains active", { err });
+            draftEnabled = false;
+            renderLog.debug("native Rich draft unavailable; preserving Venom HUD", { err });
+          } finally {
+            draftBusy = false;
           }
         }
       }
