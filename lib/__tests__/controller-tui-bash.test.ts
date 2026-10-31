@@ -233,14 +233,14 @@ describe("Telegram shell commands", () => {
     }
   });
 
-  it("ignores unaddressed shell commands in group chats", async () => {
+  it("rejects shell commands outside private chats", async () => {
     const runText = vi.spyOn(CommandGateway.prototype, "runText").mockResolvedValue(true);
     try {
       const harness = createHarness();
       await send(harness.controller, "!echo hi", 13, "supergroup");
 
       expect(runText).not.toHaveBeenCalled();
-      expect(harness.calls).toHaveLength(0);
+      expect(harness.calls.some((call) => call.text?.includes("private chats"))).toBe(true);
     } finally {
       runText.mockRestore();
     }

@@ -84,10 +84,9 @@ function createHarness(options: {
   return { controller, calls, session, bridge };
 }
 
-let nextMessageId = 30;
 const send = async (controller: TelegramController, text: string) => {
   await controller.handleMessage({
-    message_id: nextMessageId++,
+    message_id: 30,
     chat: { id: 42, type: "private" },
     from: { id: 7 },
     text,

@@ -66,8 +66,6 @@ describe("telegram ui menu() edit-in-place", () => {
     expect(transport.sendButtons.mock.calls.filter((call) =>
       call[1].includes("Telegram numerical user ID"))).toHaveLength(1);
 
-    // sendButtons resolves before waitInput registers the new flow.
-    await vi.waitFor(() => expect(runtime.hasPendingInput(CHAT)).toBe(true));
     const resolution = runtime.resolveInput(CHAT, "123456789", 101, false);
     expect(resolution.handled).toBe(true);
     expect(await prompt).toBe("123456789");

@@ -254,10 +254,6 @@ export function normalizeFlattenedTables(markdown: string): string {
  * between the compressed header, separator, and data rows. */
 export function normalizeWrappedFlattenedTables(markdown: string): string {
   const lines = markdown.split("\n");
-  // Preserve valid GFM tables before attempting to join malformed fragments.
-  // Otherwise the recovery pass can consume the header and separator as one
-  // flattened row, leaving the actual data outside the table.
-  const realTableLines = markRealTableLines(lines);
   const out: string[] = [];
   let inFence = false;
   let fenceChar = "";
@@ -269,14 +265,14 @@ export function normalizeWrappedFlattenedTables(markdown: string): string {
       else if (fenceChar === marker) { inFence = false; fenceChar = ""; }
       out.push(line); i++; continue;
     }
-    if (inFence || realTableLines[i] || !line.includes("|")) { out.push(line); i++; continue; }
+    if (inFence || !line.includes("|")) { out.push(line); i++; continue; }
     const direct = normalizeFlattenedTables(line);
     if (direct !== line) { out.push(direct); i++; continue; }
     let recovered: string | undefined;
     let consumed = 0;
     for (let n = 2; n <= 4 && i + n <= lines.length; n++) {
       const group = lines.slice(i, i + n);
-      if (group.some((part, offset) => realTableLines[i + offset] || !part.trim() || !part.includes("|") || fenceMarker(part))) break;
+      if (group.some(part => !part.trim() || !part.includes("|") || fenceMarker(part))) break;
       const joined = group.join(" ");
       const normalized = normalizeFlattenedTables(joined);
       if (normalized !== joined && hasGfmTable(normalized)) {
@@ -619,8 +615,7 @@ const renderer = {
           return prefix + line;
         }).join("\n");
       });
-      // Match paragraph spacing: leave a blank line after the list.
-      return lines.join("\n") + "\n\n";
+      // Match paragraph spacing: leave a blank line after the list.\n      return lines.join("\n") + "\n\n";
     } finally {
       _listDepth--;
     }
@@ -696,31 +691,8 @@ export function markdownToTelegramHtml(markdown: string): string {
   // marked renders them as <pre><code> — preserving column alignment in
   // Telegram's monospace font instead of mangling pipes in a proportional-font
   // paragraph. Real markdown tables (with a separator) are left for marked.
-  // Keep genuine GFM tables out of the malformed-table recovery pipeline.
-  // Recovery is intended for model-generated broken tables, not valid ones;
-  // processing valid headers/separators independently can destroy their shape.
-  const sourceLines = normalizeListParagraphSpacing(markdown).split("\n");
-  const validTableLines = markRealTableLines(sourceLines);
-  const prepared: string[] = [];
-  let segment: string[] = [];
-  const flushSegment = () => {
-    if (!segment.length) return;
-    prepared.push(protectPseudoTables(fallbackMalformedPipeTables(normalizeWrappedFlattenedTables(segment.join("\n")))));
-    segment = [];
-  };
-  for (let i = 0; i < sourceLines.length; i++) {
-    if (validTableLines[i]) {
-      flushSegment();
-      prepared.push(sourceLines[i]);
-    } else {
-      segment.push(sourceLines[i]);
-    }
-  }
-  flushSegment();
-  const protected_ = prepared.join("\n");
-  // Explicitly enable GFM for each render. Other extensions may configure
-  // the shared marked singleton and disable table tokenization globally.
-  return (marked.parse(protected_, { async: false, gfm: true }) as string).replace(/\n+$/, "");
+  const protected_ = protectPseudoTables(fallbackMalformedPipeTables(normalizeWrappedFlattenedTables(normalizeListParagraphSpacing(markdown))));
+  return (marked.parse(protected_, { async: false }) as string).replace(/\n+$/, "");
 }
 
 export function escapeAttr(text: string): string {

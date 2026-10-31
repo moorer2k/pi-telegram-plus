@@ -405,7 +405,7 @@ export function formatVenomRichLivePanel(
   options: VenomThemeOptions | undefined,
   meta: { title: string; status: string; pulse: string; section: string; transmission: string; objective: string; model: string; metrics: string },
 ): string {
-  const escaped = (input: string): string => input.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+  const escaped = (input: string): string => input.replace(/&/g, "&amp;").replace(/</g, "&lt;")
     .replace(/([\\*_~\`#[\]()!|])/g, "\\$1").replace(/\r?\n/g, " ");
   const count = venomThemeNumber(options?.visibleOperations, 3, 1, 12);
   const recent = operations.slice(-count);
@@ -414,15 +414,9 @@ export function formatVenomRichLivePanel(
     const duration = op.state !== "running" && op.finishedAt !== undefined
       ? " " + (Math.max(0, op.finishedAt - op.startedAt) / 1000).toFixed(1) + "s" : "";
     const state = options?.showOperationStates === false ? "" : " · " + op.state.toLowerCase() + duration;
-    const raw = (op.detail || op.tool).replace(/^(?:bash|terminal|exec):\s*/i, "");
-    const detail = venomRichShort(raw, Math.min(venomThemeNumber(options?.commandLength, 24, 12, 240), 24));
+    const raw = (op.detail || op.tool).replace(/^(?:bash|terminal|exec):\\s*/i, "");
+    const detail = venomRichShort(raw, venomThemeNumber(options?.commandLength, 72, 24, 240));
     const safeCode = detail.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replaceAll("`", "'");
-    // Single-operation mode uses a stable two-line status/detail layout.
-    if (count === 1) {
-      const label = op.tag.toUpperCase().replace(/[^A-Z0-9_-]/g, "").slice(0, 12) || "TRACE";
-      const stateLabel = op.state.toUpperCase() + duration;
-      return "**◆ " + label + " · " + stateLabel + "**\n`" + safeCode + "`";
-    }
     return "- `" + safeCode + "`" + escaped(state);
   };
   const slots = [...recent.map(line)];
@@ -437,8 +431,8 @@ export function formatVenomRichLivePanel(
   const history = options?.collapseOperations === "off" ? "" :
     "\n\n<details>\n<summary>Earlier traces</summary>\n\n" +
     (older.length
-      ? older.slice(-16).map(op => "- " + escaped(
-        op.tag + " · " + op.state + " · " + venomRichShort(op.detail, 32))).join("\n")
+      ? older.slice(-16).map(op => "- " + escaped(venomRichShort(
+        op.tag + " · " + op.state + " · " + op.detail, 65))).join("\n")
       : "No earlier traces") +
     "\n\n</details>";
 

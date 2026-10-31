@@ -343,27 +343,6 @@ export function createTelegramTransport(
   };
 
   return {
-    async setReaction(chatId, messageId, emoji) {
-      if (!Number.isSafeInteger(chatId) || chatId === 0) throw new Error("Invalid Telegram chat ID");
-      if (!Number.isSafeInteger(messageId) || messageId < 1) throw new Error("Invalid Telegram message ID");
-      if (typeof emoji !== "string" || Array.from(emoji).length > 8) throw new Error("Invalid Telegram reaction emoji");
-      const lease = captureSendLease();
-      await callApi("setMessageReaction", {
-        chat_id: chatId,
-        message_id: messageId,
-        reaction: emoji ? [{ type: "emoji", emoji }] : [],
-        is_big: false,
-      }, undefined, lease, { maxAttempts: 1 });
-    },
-    async sendDraft(chatId, draftId, text) {
-      if (!Number.isSafeInteger(chatId) || chatId <= 0) throw new Error("Telegram drafts require a private chat ID");
-      if (!Number.isSafeInteger(draftId) || draftId < 1) throw new Error("Invalid Telegram draft ID");
-      if (!text || Buffer.byteLength(text, "utf8") > 4096) throw new Error("Telegram draft exceeds 4096 bytes");
-      const lease = captureSendLease();
-      // Drafts are ephemeral and superseded by later updates; avoid retrying
-      // stale previews after transient failures or flood-control responses.
-      await callApi("sendMessageDraft", { chat_id: chatId, draft_id: draftId, text }, undefined, lease, { maxAttempts: 1 });
-    },
     async sendText(chatId, text, messageThreadId, replyToMessageId, richMarkdown, delivery) {
       const lease = captureSendLease();
       if (richMarkdown && richMessagesAvailable) {
@@ -445,9 +424,6 @@ export function createTelegramTransport(
           // the current Rich card is valid: never overwrite it with HTML.
           if (err instanceof TelegramApiRequestError && /message is not modified/i.test(err.message)) return;
           if (isNetworkError(err)) return;
-          // A deleted or expired target cannot be recovered by changing
-          // formatting. Propagate immediately so the caller can replace it.
-          if (isMissingEditTarget(err)) throw err;
           noteRichFailure("editMessageText", err);
         }
       }
@@ -459,8 +435,7 @@ export function createTelegramTransport(
         parse_mode: "HTML",
         link_preview_options: { is_disabled: true },
       }, undefined, lease).catch((err) => {
-        if (isMissingEditTarget(err)) throw err;
-        if (isNetworkError(err)) return; // transient failure: keep existing status card
+        if (isMissingEditTarget(err) || isNetworkError(err)) throw err;
         warnHtmlFallback("editMessageText", err, first);
         return callApi("editMessageText", {
           chat_id: chatId,
@@ -468,8 +443,7 @@ export function createTelegramTransport(
           text: stripHtml(first),
           link_preview_options: { is_disabled: true },
         }, undefined, lease).catch(err => {
-          if (isMissingEditTarget(err)) throw err;
-          if (isNetworkError(err)) return;
+          if (isMissingEditTarget(err) || isNetworkError(err)) throw err;
           apiLog.debug("editMessageText plain-text fallback failed", { chatId, messageId, err });
         });
       });

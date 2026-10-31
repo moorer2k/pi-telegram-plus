@@ -986,137 +986,28 @@ export function createTelegramController(deps: {
 
   // Per chat/thread prompt queues: each Telegram topic chains independently.
   const promptTails = new Map<string, Promise<void>>();
-  // Pending counts exclude the currently executing prompt. The generation
-  // fence below invalidates queued work without interrupting an active turn.
-  const pendingPromptCounts = new Map<string, number>();
-  // Pending source message IDs enable precise cancellation without aborting
-  // the active turn or discarding other queued instructions.
-  const pendingSourceMessages = new Map<string, Set<number>>();
-  const cancelledSourceMessages = new Map<string, Set<number>>();
-  // Per-target pause gates: no timers, no polling, and no cross-chat effects.
-  const pausedQueues = new Set<string>();
-  const pauseWaiters = new Map<string, Set<() => void>>();
-  let controllerDisposed = false;
-  const resumeQueue = (key: string): boolean => {
-    const wasPaused = pausedQueues.delete(key);
-    const waiters = pauseWaiters.get(key);
-    pauseWaiters.delete(key);
-    for (const wake of waiters ?? []) wake();
-    return wasPaused;
-  };
-  const waitForQueueResume = async (key: string): Promise<void> => {
-    while (!controllerDisposed && pausedQueues.has(key)) {
-      await new Promise<void>((resolve) => {
-        const waiters = pauseWaiters.get(key) ?? new Set<() => void>();
-        waiters.add(resolve);
-        pauseWaiters.set(key, waiters);
-      });
-    }
-  };
-  // Telegram may redeliver a message after reconnect/failover. Bound the
-  // dedup cache so long-lived bots cannot accumulate unbounded message IDs.
-  const seenIncomingMessages = new Map<string, number>();
-  const MAX_SEEN_MESSAGES = 4096;
-  const INCOMING_DEDUP_TTL_MS = 60 * 60 * 1000;
-  const claimIncomingMessage = (chatId: number, messageId: number): boolean => {
-    const now = Date.now();
-    const key = String(chatId) + ":" + String(messageId);
-    const previous = seenIncomingMessages.get(key);
-    if (previous !== undefined && now - previous < INCOMING_DEDUP_TTL_MS) return false;
-    seenIncomingMessages.delete(key);
-    seenIncomingMessages.set(key, now);
-    // Insertion order provides a bounded, approximate LRU with no timers.
-    while (seenIncomingMessages.size > MAX_SEEN_MESSAGES) {
-      const oldest = seenIncomingMessages.keys().next().value;
-      if (oldest === undefined) break;
-      seenIncomingMessages.delete(oldest);
-    }
-    return true;
-  };
   // Increasing generation per chat/thread lets stop invalidate pending queue items.
   const interruptGenerationByTarget = new Map<string, number>();
 
   const getOrCreateTail = (key: string): Promise<void> => promptTails.get(key) ?? Promise.resolve();
-  const setTail = (key: string, tail: Promise<void>) => {
-    promptTails.set(key, tail);
-    // Do not retain completed queue chains for every chat/topic ever seen.
-    // Identity check prevents an older completion from deleting a newer tail.
-    void tail.finally(() => {
-      if (promptTails.get(key) === tail) {
-        promptTails.delete(key);
-        pruneQueueState(key);
-      }
-    });
-  };
+  const setTail = (key: string, tail: Promise<void>) => promptTails.set(key, tail);
   const getInterruptGeneration = (key: string): number => interruptGenerationByTarget.get(key) ?? 0;
-  const pruneQueueState = (key: string): void => {
-    if (!promptTails.has(key) && !pendingPromptCounts.has(key) && !pausedQueues.has(key)) {
-      interruptGenerationByTarget.delete(key);
-      pendingSourceMessages.delete(key);
-      cancelledSourceMessages.delete(key);
-    }
-  };
   const bumpInterruptGeneration = (key: string): void => {
     const next = getInterruptGeneration(key) + 1;
     interruptGenerationByTarget.set(key, next);
-    // Invalidate the visible pending depth immediately. Older queued tasks
-    // retain their captured generation and will be discarded at dispatch.
-    pendingPromptCounts.delete(key);
-    pendingSourceMessages.delete(key);
-    cancelledSourceMessages.delete(key);
-    resumeQueue(key);
-    pruneQueueState(key);
   };
 
   const fastInterrupt = async (chatId: number, messageThreadId?: number, sourceMessageId?: number) => {
-    const key = targetKey(chatId, messageThreadId);
-    const pending = pendingPromptCounts.get(key) ?? 0;
     const session = deps.getSession();
     if (!session) {
-      // A disconnected Pi session must not prevent the owner of a queue
-      // from discarding stale pending Telegram instructions.
-      bumpInterruptGeneration(key);
-      await deps.transport.sendText(chatId,
-        `Pi session unavailable. Cleared ${pending} queued message(s) for this chat/topic.`,
-        messageThreadId, sourceMessageId);
+      await deps.transport.sendText(chatId, "π session is not ready yet.", messageThreadId, sourceMessageId);
       return;
     }
 
-    const ownedTurn = deps.getActiveTurn(chatId, messageThreadId);
-    // Pi's abort() is session-global. A chat without the active turn must
-    // never terminate work initiated by a different Telegram chat/topic or
-    // by the local TUI. It may only discard its own queued instructions.
-    bumpInterruptGeneration(key);
-    if (!ownedTurn) {
-      ctrlLog.info("telegram stop cleared own queue without global abort", { chatId, messageThreadId, pending });
-      await deps.transport.sendText(chatId,
-        pending > 0 ? `Cleared ${pending} queued message(s). No turn owned by this chat/topic was interrupted.` : "No active turn owned by this chat/topic to stop.",
-        messageThreadId, sourceMessageId);
-      return;
-    }
-    // The shared Pi session may have switched ownership since the first
-    // lookup. Re-check immediately before invoking the session-global abort.
-    if (deps.getActiveTurn(chatId, messageThreadId) !== ownedTurn) {
-      ctrlLog.warn("telegram stop skipped abort after turn ownership changed", { chatId, messageThreadId });
-      await deps.transport.sendText(chatId, "Turn ownership changed before abort; only your pending queue was cleared.", messageThreadId, sourceMessageId)
-        .catch(ctrlLog.swallow("warn", "sendText changed-ownership notice failed", { chatId, messageThreadId }));
-      return;
-    }
-    // Never let a failed Telegram acknowledgement suppress the abort itself.
-    // Execute the abort first, then report the actual outcome.
-    try {
-      if (typeof (session as any).abort !== "function") {
-        throw new Error("Pi session does not expose abort()");
-      }
-      await Promise.resolve((session as any).abort());
-      ctrlLog.info("telegram owned turn abort completed", { chatId, messageThreadId, pending });
-      await deps.transport.sendText(chatId, "⏹️ Abort requested; pending queue cleared.", messageThreadId, sourceMessageId)
-        .catch(ctrlLog.swallow("warn", "sendText abort acknowledgement failed", { chatId, messageThreadId }));
-    } catch (err) {
-      ctrlLog.error("telegram stop abort failed", { chatId, messageThreadId, err });
-      await deps.transport.sendText(chatId, "Could not abort the active turn. Check the Telegram error log.", messageThreadId, sourceMessageId)
-        .catch(ctrlLog.swallow("warn", "sendText abort failure notice failed", { chatId, messageThreadId }));
-    }
+    bumpInterruptGeneration(targetKey(chatId, messageThreadId));
+    await deps.transport.sendText(chatId, "⏹️ Interrupt requested.", messageThreadId, sourceMessageId);
+    const abortResult = (session as any).abort?.();
+    void abortResult?.catch?.(() => undefined);
   };
 
   const reportPromptFailure = async (label: string, chatId: number, messageThreadId: number | undefined, sourceMessageId: number | undefined, err: unknown): Promise<void> => {
@@ -1132,7 +1023,7 @@ export function createTelegramController(deps: {
   // agent's turn instead (repo issue #10).
   const deliverToMainThread = async (text: string, chatId: number, messageThreadId: number | undefined, sourceMessageId: number | undefined): Promise<void> => {
     const session = deps.getSession();
-    if (!session) throw new Error("Pi session unavailable during queued prompt delivery");
+    if (!session) return;
     const ctx = session.extensionRunner.createCommandContext();
     const idleFn = typeof (ctx as any).isIdle === "function" ? (ctx as any).isIdle : undefined;
     const waitFn = typeof (ctx as any).waitForIdle === "function" ? (ctx as any).waitForIdle : undefined;
@@ -1159,10 +1050,9 @@ export function createTelegramController(deps: {
           try {
             await waitFn.call(ctx);
           } catch (err) {
-            // Surface interrupted waits to the queue failure handler instead of
-            // silently acknowledging a prompt that never reached the agent.
-            ctrlLog.warn("waitForIdle during main-delivery hold interrupted", { chatId, messageThreadId, err });
-            throw err;
+            // Session disposed / torn down during the wait — nothing to deliver to.
+            ctrlLog.debug("waitForIdle during main-delivery hold interrupted", { chatId, messageThreadId, err });
+            return;
           }
         } else {
           await sleep(500);
@@ -1174,31 +1064,22 @@ export function createTelegramController(deps: {
         // A main turn (e.g. a goal continuation) started while we waited —
         // behave like the terminal and steer into it instead of holding.
         if (idleFn && !idleFn.call(ctx)) {
-          // Keep held messages isolated from an unrelated active turn.
-          continue;
+          await session.prompt(text, { source: "interactive", streamingBehavior: "steer" as const });
+          return;
         }
-        continue;
-      }
-      // isStreaming can lag behind Pi's command-context busy state. Check
-      // both before dispatch so held messages cannot enter a busy session.
-      if (idleFn && !idleFn.call(ctx)) {
-        await sendHeldNotice();
-        await sleep(120);
         continue;
       }
       try {
         await session.prompt(text, { source: "interactive" });
         return;
       } catch (err) {
-        // Only retry a genuine busy-state race. Other prompt failures are
-        // permanent for this delivery and belong in the error log.
-        const busy = Boolean(session.isStreaming) || Boolean(idleFn && !idleFn.call(ctx));
-        if (!busy) throw err;
+        // A goal continuation or workflow step may have started between our
+        // idle check and prompt dispatch. Loop and wait again.
         ctrlLog.debug("main-delivery prompt raced with a new turn; waiting again", { chatId, messageThreadId, attempt, err });
         await sleep(120);
       }
     }
-    throw new Error("main-mode delivery attempts exhausted");
+    await reportPromptFailure("main-delivery", chatId, messageThreadId, sourceMessageId, new Error("main-mode delivery attempts exhausted"));
   };
 
   // Hold-and-deliver path shared by "main" and idle-"tui": wait until the
@@ -1215,7 +1096,7 @@ export function createTelegramController(deps: {
     const session = deps.getSession();
     if (!session) {
       deps.endTelegramTurn(chatId, turn);
-      throw new Error("Pi session unavailable after Telegram turn acquisition");
+      return;
     }
     const telegramUi = deps.ui.create(chatId, messageThreadId, sourceMessageId);
     try {
@@ -1264,16 +1145,13 @@ export function createTelegramController(deps: {
     } catch {
       mainBusy = session.isStreaming;
     }
-    // A shared Pi session can be busy with another Telegram topic or the
-    // local TUI. Never steer a message into a turn owned by another target.
-    // Only an existing turn belonging to this chat/topic may be steered.
-    const isSteer = mainBusy && deps.getActiveTurn(chatId, messageThreadId) !== undefined;
+    const isSteer = mainBusy;
 
     // While the main loop is idle, hold the message until it settles, then
     // submit a plain prompt so the message always starts a fresh main-thread
     // turn; it is never steered or queued into a background workflow agent's
     // turn.
-    if (!isSteer) {
+    if (!mainBusy) {
       await runMainDelivery(text, chatId, replaceMessageId, messageThreadId, sourceMessageId);
       return;
     }
@@ -1331,63 +1209,18 @@ export function createTelegramController(deps: {
     }
   };
 
-  const submitText = async (text: string, chatId: number, replaceMessageId?: number, messageThreadId?: number, sourceMessageId?: number): Promise<boolean> => {
+  const submitText = async (text: string, chatId: number, replaceMessageId?: number, messageThreadId?: number, sourceMessageId?: number) => {
     // Chain behind the previous prompt for this chat/thread so multiple
     // messages are delivered to the main thread in order.
     const key = targetKey(chatId, messageThreadId);
-    if (controllerDisposed) return false;
-    // Bound queued work per topic to avoid unbounded memory growth when an
-    // agent is stalled or a Telegram client floods messages.
-    const pending = pendingPromptCounts.get(key) ?? 0;
-    if (pending >= 32) {
-      ctrlLog.warn("telegram prompt queue capacity reached", { chatId, messageThreadId, pending });
-      await deps.transport.sendText(chatId, "Queue full (32 pending messages). Use /queue clear or wait for delivery.", messageThreadId, sourceMessageId)
-        .catch(ctrlLog.swallow("warn", "queue capacity notice failed", { chatId, messageThreadId }));
-      return false;
-    }
     const generation = getInterruptGeneration(key);
-    pendingPromptCounts.set(key, pending + 1);
-    if (sourceMessageId !== undefined) {
-      const ids = pendingSourceMessages.get(key) ?? new Set<number>();
-      ids.add(sourceMessageId);
-      pendingSourceMessages.set(key, ids);
-    }
     const task = getOrCreateTail(key)
-      .then(async () => {
-        // The queued item is no longer pending once its dispatch slot starts.
-        // A clear/stop invalidates the previous generation. Never subtract an
-        // obsolete task from the count of messages queued after that clear.
-        await waitForQueueResume(key);
-        if (controllerDisposed || generation !== getInterruptGeneration(key)) {
-          // A clear/stop already reset the visible pending count. Discard
-          // stale cancellation tombstones as their old queue slots drain.
-          if (sourceMessageId !== undefined) {
-            cancelledSourceMessages.get(key)?.delete(sourceMessageId);
-            if (cancelledSourceMessages.get(key)?.size === 0) cancelledSourceMessages.delete(key);
-          }
-          ctrlLog.info("queued telegram prompt discarded", { chatId, messageThreadId, sourceMessageId, reason: "generation invalidated" });
-          return;
-        }
-        if (sourceMessageId !== undefined) {
-          pendingSourceMessages.get(key)?.delete(sourceMessageId);
-          if (pendingSourceMessages.get(key)?.size === 0) pendingSourceMessages.delete(key);
-          const cancelled = cancelledSourceMessages.get(key);
-          if (cancelled?.delete(sourceMessageId)) {
-            // /queue cancel already decremented the visible pending depth.
-            // Do not decrement it again when the cancelled slot is reached.
-            if (cancelled.size === 0) cancelledSourceMessages.delete(key);
-            ctrlLog.info("queued telegram prompt individually cancelled", { chatId, messageThreadId, sourceMessageId });
-            return;
-          }
-        }
-        const remaining = (pendingPromptCounts.get(key) ?? 1) - 1;
-        if (remaining > 0) pendingPromptCounts.set(key, remaining);
-        else pendingPromptCounts.delete(key);
-        await runPrompt(text, chatId, replaceMessageId, messageThreadId, sourceMessageId);
+      .then(() => {
+        if (generation !== getInterruptGeneration(key)) return;
+        return runPrompt(text, chatId, replaceMessageId, messageThreadId, sourceMessageId);
       })
       .catch((err) => reportPromptFailure("prompt-delivery", chatId, messageThreadId, sourceMessageId, err));
     setTail(key, task);
-    return true;
   };
 
   // §4.5 rule 6: a command arriving while a dialog is still waiting is the remote user
@@ -1774,10 +1607,6 @@ export function createTelegramController(deps: {
       if (typeof chatId !== "number") return;
       const messageThreadId = message.message_thread_id;
       const sourceMessageId = message.message_id;
-      if (typeof sourceMessageId === "number" && !claimIncomingMessage(chatId, sourceMessageId)) {
-        ctrlLog.debug("duplicate telegram message suppressed", { chatId, messageThreadId, sourceMessageId });
-        return;
-      }
       const rawText = message.text ?? message.caption ?? "";
       ctrlLog.debug("incoming telegram message shape", {
         messageId: message.message_id,
@@ -1871,181 +1700,6 @@ export function createTelegramController(deps: {
         return;
       }
       if (message.reply_to_message || message.quote || message.text_quote || message.external_reply) logTelegramReplyContext(message);
-      // Pi supports followUp natively: unlike steer, this waits for the current
-      // turn to finish before applying the instruction. Only the owning topic
-      // may inject into its active turn; otherwise use the ordinary queue.
-      if (trimmed === "/followup" || trimmed.startsWith("/followup ")) {
-        const instruction = trimmed.slice("/followup".length).trim();
-        if (!instruction) {
-          await deps.transport.sendText(chatId, "Usage: /followup <instruction> — run after the current turn.", messageThreadId, sourceMessageId);
-          return;
-        }
-        const activeTurn = deps.getActiveTurn(chatId, messageThreadId);
-        const followupSession = deps.getSession();
-        if (activeTurn && followupSession?.isStreaming) {
-          try {
-            await followupSession.prompt(instruction, { source: "interactive", streamingBehavior: "followUp" as const });
-            ctrlLog.info("telegram followup accepted", { chatId, messageThreadId, sourceMessageId });
-            await deps.transport.sendText(chatId, "Follow-up instruction queued for the active turn.", messageThreadId, sourceMessageId);
-          } catch (err) {
-            ctrlLog.error("telegram followup failed", { chatId, messageThreadId, sourceMessageId, err });
-            await deps.transport.sendText(chatId, "Follow-up failed. Check the Telegram error log.", messageThreadId, sourceMessageId);
-          }
-        } else {
-          const accepted = await submitText(instruction, chatId, undefined, messageThreadId, sourceMessageId);
-          if (accepted) await deps.transport.sendText(chatId, "Instruction submitted to the normal prompt queue.", messageThreadId, sourceMessageId);
-        }
-        return;
-      }
-      if (trimmed === "/steer" || trimmed.startsWith("/steer ")) {
-        const instruction = trimmed.slice("/steer".length).trim();
-        if (!instruction) {
-          await deps.transport.sendText(chatId, "Usage: /steer <instruction> — inject into the active turn for this chat/topic.", messageThreadId, sourceMessageId);
-          return;
-        }
-        const activeTurn = deps.getActiveTurn(chatId, messageThreadId);
-        const steerSession = deps.getSession();
-        if (!activeTurn || !steerSession?.isStreaming) {
-          await deps.transport.sendText(chatId, "No active turn in this chat/topic to steer.", messageThreadId, sourceMessageId);
-          return;
-        }
-        try {
-          const context = steerSession.extensionRunner.createCommandContext();
-          if (typeof (context as any).isIdle === "function" && (context as any).isIdle()) {
-            await deps.transport.sendText(chatId, "Main agent is idle; use a normal message to start a new turn.", messageThreadId, sourceMessageId);
-            return;
-          }
-          await steerSession.prompt(instruction, { source: "interactive", streamingBehavior: "steer" as const });
-          ctrlLog.info("telegram explicit steer accepted", { chatId, messageThreadId, sourceMessageId });
-          await deps.transport.sendText(chatId, "Steering instruction submitted.", messageThreadId, sourceMessageId);
-        } catch (err) {
-          ctrlLog.error("telegram explicit steer failed", { chatId, messageThreadId, sourceMessageId, err });
-          await deps.transport.sendText(chatId, "Steering failed. Check the Telegram error log.", messageThreadId, sourceMessageId);
-        }
-        return;
-      }
-      if (trimmed === "/unreact") {
-        const targetMessageId = message.reply_to_message?.message_id;
-        if (!targetMessageId) {
-          await deps.transport.sendText(chatId, "Reply to a message with /unreact to remove the bot's reaction.", messageThreadId, sourceMessageId);
-          return;
-        }
-        if (!deps.transport.setReaction) {
-          await deps.transport.sendText(chatId, "Telegram reactions are unavailable on this transport.", messageThreadId, sourceMessageId);
-          return;
-        }
-        try {
-          await deps.transport.setReaction(chatId, targetMessageId, "");
-          ctrlLog.info("telegram message reaction removed", { chatId, messageThreadId, targetMessageId });
-        } catch (err) {
-          ctrlLog.error("telegram message reaction removal failed", { chatId, messageThreadId, targetMessageId, err });
-          await deps.transport.sendText(chatId, "Reaction removal failed. Check the Telegram error log.", messageThreadId, sourceMessageId);
-        }
-        return;
-      }
-      if (trimmed === "/react" || trimmed.startsWith("/react ")) {
-        const emoji = trimmed.slice("/react".length).trim();
-        const targetMessageId = message.reply_to_message?.message_id;
-        if (!emoji || !targetMessageId) {
-          await deps.transport.sendText(chatId, "Reply to a message with /react <emoji>.", messageThreadId, sourceMessageId);
-          return;
-        }
-        if (!deps.transport.setReaction) {
-          await deps.transport.sendText(chatId, "Telegram reactions are unavailable on this transport.", messageThreadId, sourceMessageId);
-          return;
-        }
-        try {
-          await deps.transport.setReaction(chatId, targetMessageId, emoji);
-          ctrlLog.info("telegram message reaction applied", { chatId, messageThreadId, targetMessageId });
-        } catch (err) {
-          ctrlLog.error("telegram message reaction failed", { chatId, messageThreadId, targetMessageId, err });
-          await deps.transport.sendText(chatId, "Reaction failed. The emoji may be unsupported or the bot lacks permission.", messageThreadId, sourceMessageId);
-        }
-        return;
-      }
-      if (trimmed === "/queue pause") {
-        const key = targetKey(chatId, messageThreadId);
-        pausedQueues.add(key);
-        ctrlLog.info("telegram queue paused", { chatId, messageThreadId });
-        await deps.transport.sendText(chatId, "Queue paused for this chat/topic. Active work continues. Use /queue resume to dispatch pending messages.", messageThreadId, sourceMessageId);
-        return;
-      }
-      if (trimmed === "/queue resume") {
-        const key = targetKey(chatId, messageThreadId);
-        const resumed = resumeQueue(key);
-        ctrlLog.info("telegram queue resume requested", { chatId, messageThreadId, resumed });
-        await deps.transport.sendText(chatId, resumed ? "Queue resumed." : "Queue was not paused.", messageThreadId, sourceMessageId);
-        return;
-      }
-      if (trimmed === "/queue list") {
-        const key = targetKey(chatId, messageThreadId);
-        const pendingIds = pendingSourceMessages.get(key);
-        if (!pendingIds?.size) {
-          await deps.transport.sendText(chatId, "No queued messages with Telegram message IDs in this chat/topic.", messageThreadId, sourceMessageId);
-          return;
-        }
-        // IDs only: never expose message bodies, which can contain secrets.
-        // Bound the output to avoid Telegram's message-length limits.
-        const ids = [...pendingIds].slice(0, 32);
-        const remaining = pendingIds.size - ids.length;
-        const lines = ids.map((id, index) => String(index + 1) + ". #" + id);
-        const suffix = remaining > 0 ? "\n…and " + remaining + " more." : "";
-        await deps.transport.sendText(chatId,
-          "Pending message IDs (oldest first):\n" + lines.join("\n") + suffix +
-          "\nCancel one with /queue cancel <message_id>.",
-          messageThreadId, sourceMessageId);
-        return;
-      }
-      if (trimmed === "/queue cancel" || trimmed.startsWith("/queue cancel ")) {
-        const key = targetKey(chatId, messageThreadId);
-        const argument = trimmed.slice("/queue cancel".length).trim();
-        // Reject numeric coercions such as hex, scientific notation or spaces.
-        const target = argument ? (/^[1-9][0-9]*$/.test(argument) ? Number(argument) : NaN) : message.reply_to_message?.message_id;
-        if (!Number.isSafeInteger(target) || (target ?? 0) <= 0) {
-          await deps.transport.sendText(chatId, "Usage: reply to a queued message with /queue cancel, or use /queue cancel <message_id>.", messageThreadId, sourceMessageId);
-          return;
-        }
-        if (!pendingSourceMessages.get(key)?.has(target!)) {
-          await deps.transport.sendText(chatId, "That message is not pending in this chat/topic.", messageThreadId, sourceMessageId);
-          return;
-        }
-        pendingSourceMessages.get(key)!.delete(target!);
-        const cancelled = cancelledSourceMessages.get(key) ?? new Set<number>();
-        cancelled.add(target!);
-        cancelledSourceMessages.set(key, cancelled);
-        const remaining = Math.max(0, (pendingPromptCounts.get(key) ?? 1) - 1);
-        if (remaining) pendingPromptCounts.set(key, remaining);
-        else pendingPromptCounts.delete(key);
-        ctrlLog.info("telegram queued message cancelled", { chatId, messageThreadId, targetMessageId: target });
-        await deps.transport.sendText(chatId, "Queued message cancelled. Active work was not interrupted.", messageThreadId, sourceMessageId);
-        return;
-      }
-      if (trimmed === "/queue" || trimmed === "/queue clear" || trimmed === "/queue all") {
-        const key = targetKey(chatId, messageThreadId);
-        const pending = pendingPromptCounts.get(key) ?? 0;
-        if (trimmed === "/queue all") {
-          // Global queue state is owner-only even when group members may submit
-          // prompts; otherwise a group user can observe other chats' activity.
-          if (!ownerAuthorized) {
-            await deps.transport.sendText(chatId, "Only the bot owner can inspect all chat queues.", messageThreadId, sourceMessageId);
-            return;
-          }
-          // Aggregate counts only; do not expose other chats' messages or IDs.
-          const total = [...pendingPromptCounts.values()].reduce((sum, count) => sum + count, 0);
-          await deps.transport.sendText(chatId, `Pending across active chat/topic queues: ${total}.`, messageThreadId, sourceMessageId);
-          return;
-        }
-        if (trimmed === "/queue clear") {
-          // Invalidate waiting messages only; leave the running turn alone.
-          bumpInterruptGeneration(key);
-          ctrlLog.info("telegram queue cleared", { chatId, messageThreadId, pending });
-          await deps.transport.sendText(chatId, `Cleared ${pending} queued message(s). Active work was not interrupted.`, messageThreadId, sourceMessageId);
-        } else {
-          const active = deps.getActiveTurn(chatId, messageThreadId) !== undefined;
-          await deps.transport.sendText(chatId, `Queue: ${pending} pending message(s). Active Telegram turn: ${active ? "yes" : "no"}. Dispatch: ${pausedQueues.has(key) ? "paused" : "running"}. Use /queue pause, /queue resume, or /queue clear.`, messageThreadId, sourceMessageId);
-        }
-        return;
-      }
       if (trimmed === "/stop") {
         // §4.5 rule 6: the dialog gets the Esc first, then the normal /stop path
         // runs (pending input, bash abort, turn interrupt).
@@ -2061,26 +1715,10 @@ export function createTelegramController(deps: {
           return;
         }
         const stopSession = deps.getSession();
-        if (stopSession && isBashRunning(stopSession) && deps.getActiveTurn(chatId, messageThreadId)) {
+        if (stopSession && isBashRunning(stopSession)) {
           const abort = readBashAbort(stopSession);
-          if (!abort) {
-            ctrlLog.warn("telegram stop bash abort unavailable", { chatId, messageThreadId });
-            await deps.transport.sendText(chatId, "Bash abort is unavailable.", messageThreadId, sourceMessageId);
-            return;
-          }
-          try {
-            // Bash abort is session-global, so recheck ownership immediately
-            // before invoking it, just as for regular turn interruption.
-            if (!deps.getActiveTurn(chatId, messageThreadId)) {
-              await fastInterrupt(chatId, messageThreadId, sourceMessageId);
-              return;
-            }
-            await Promise.resolve(abort());
-            await deps.transport.sendText(chatId, "⏹️ Bash stop requested.", messageThreadId, sourceMessageId);
-          } catch (err) {
-            ctrlLog.error("telegram stop bash abort failed", { chatId, messageThreadId, err });
-            await deps.transport.sendText(chatId, "Bash stop failed. Check the Telegram error log.", messageThreadId, sourceMessageId);
-          }
+          await Promise.resolve(abort?.()).catch(ctrlLog.swallow("debug", "abortBash from /stop failed"));
+          await deps.transport.sendText(chatId, "⏹️ Bash stopped.", messageThreadId, sourceMessageId);
           return;
         }
         await fastInterrupt(chatId, messageThreadId, sourceMessageId);
@@ -2204,13 +1842,6 @@ export function createTelegramController(deps: {
     },
 
     dispose() {
-      controllerDisposed = true;
-      // Release all paused dispatch tasks and invalidate their generations.
-      // A stopped controller must not dispatch messages after disposal.
-      for (const key of [...pausedQueues]) bumpInterruptGeneration(key);
-      for (const key of [...promptTails.keys()]) bumpInterruptGeneration(key);
-      for (const key of [...pauseWaiters.keys()]) resumeQueue(key);
-      seenIncomingMessages.clear();
       dialogBroker.stop();
       unsubscribeLocalTui();
       commandGateway.dispose();
