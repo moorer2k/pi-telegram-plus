@@ -54,3 +54,17 @@ export function richMarkdownForTables(markdown: string): string | undefined {
   if (Array.from(rich).length > TELEGRAM_RICH_TEXT_LIMIT) return undefined;
   return rich;
 }
+
+/**
+ * Native Rich Markdown delivery for complete responses, including LaTeX.
+ * Inspired by the rich-first approach of Pi Telegram bridges. Never mutate
+ * fenced code or attempt a rich edit with unbalanced fences.
+ * Unsupported API servers use the existing HTML fallback.
+ */
+export function richMarkdownForResponse(markdown: string): string | undefined {
+  if (!markdown.trim() || !hasBalancedFences(markdown)) return undefined;
+  const normalized = normalizeWrappedFlattenedTables(normalizeListParagraphSpacing(markdown));
+  const rich = escapeRichMarkdown(protectPseudoTables(normalized));
+  if (Array.from(rich).length > TELEGRAM_RICH_TEXT_LIMIT) return undefined;
+  return rich;
+}
