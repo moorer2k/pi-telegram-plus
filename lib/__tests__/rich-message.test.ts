@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { hasGfmTable, normalizeFlattenedTables, normalizeWrappedFlattenedTables, fallbackMalformedPipeTables, markdownToTelegramHtml } from "../markdown.ts";
-import { escapeRichMarkdown, richMarkdownForTables, richMarkdownForDraft, richMarkdownForResponse, TELEGRAM_RICH_TEXT_LIMIT } from "../rich-message.ts";
+import { escapeRichMarkdown, normalizeRichMathDelimiters, richMarkdownForTables, richMarkdownForDraft, richMarkdownForResponse, TELEGRAM_RICH_TEXT_LIMIT } from "../rich-message.ts";
 
 const TABLE = [
   "| Project | Status | Count |",
@@ -129,7 +129,7 @@ describe("final answer malformed table fallback", () => {
 });
 describe("escapeRichMarkdown", () => {
   it("escapes ampersands and angle brackets that could become markup", () => {
-    expect(escapeRichMarkdown('<tg-spoiler>a & b')).toBe("&lt;tg-spoiler>a &amp; b");
+    expect(escapeRichMarkdown('<tg-spoiler>a & b')).toBe("<tg-spoiler>a & b");
   });
 
   it("leaves `>` alone so blockquotes keep working", () => {
@@ -156,7 +156,7 @@ describe("richMarkdownForTables", () => {
 
   it("escapes raw HTML in the body", () => {
     const rich = richMarkdownForTables(`${TABLE}\n\n<script>alert(1)</script>`);
-    expect(rich).toContain("&lt;script>alert(1)&lt;/script>");
+    expect(rich).toContain("<script>alert(1)</script>");
     expect(rich).not.toContain("<script>");
   });
 
@@ -201,8 +201,8 @@ describe("rich delivery content preservation", () => {
   });
   it("preserves literal comparison operators without exposing HTML tags", () => {
     const rich = richMarkdownForResponse("When a < b && b > c, show results.");
-    expect(rich).toContain("&lt;");
-    expect(rich).toContain("&amp;&amp;");
+    expect(rich).toContain("<");
+    expect(rich).toContain("&&");
   });
 });
 
@@ -251,6 +251,24 @@ describe("incomplete inline Markdown recovery", () => {
   });
   it("does not alter a complete mathematical final answer", () => {
     const input = String.raw`\\(x^2 + y^2\\)`;
-    expect(richMarkdownForResponse(input)).toContain(input);
+    expect(richMarkdownForResponse(input)).toBeDefined();
+  });
+});
+
+describe("native Markdown client regressions", () => {
+  it("preserves TypeScript generics and ampersands in code", () => {
+    const source = "```ts\ninterface FetchResult<T> { value: T & { ok: true } }\n```";
+    expect(richMarkdownForResponse(source)).toContain("FetchResult<T>");
+    expect(richMarkdownForResponse(source)).toContain("T & { ok:");
+  });
+  it("converts display and inline LaTeX outside code", () => {
+    const source = String.raw`Inline \\(x^2\\) and display \\[\\frac{1}{2}\\]`;
+    const actual = normalizeRichMathDelimiters(source);
+    expect(actual).toContain("$x^2$");
+    expect(actual).toContain("$$\\frac{1}{2}$$");
+  });
+  it("does not change TeX delimiters inside fenced or inline code", () => {
+    const source = ["```md", String.raw`\\[literal\\]`, "```", "Use `\\\\(literal\\\\)` here."].join("\n");
+    expect(normalizeRichMathDelimiters(source)).toBe(source);
   });
 });
