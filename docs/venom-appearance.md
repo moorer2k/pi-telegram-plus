@@ -161,3 +161,11 @@ Venom's Rich activity rows also distinguish live state without duplicating numer
 ## Compact traces (post-divider correction)
 
 Each trace uses a short bold Venom lifecycle label (`◈`, `◆`, `×`) and one code-formatted command excerpt. This prevents automatic URL linking and excessive text wrapping. Fixed tool slots remain and the native Rich `<details>` history stays in place. The control is **not** a way to force a Telegram message to a fixed pixel width; the Bot API does not provide one.
+
+## Final-answer table guard and diagnostics
+
+Malformed LLM pipe tables can still occur after the ordinary normalization pass. The final HTML renderer now has a separate conservative fallback: if a line contains obvious repeated Markdown separator cells but cannot be reconstructed as a valid GFM table, it is displayed as readable vertical values rather than raw `| --- |` syntax. Complete tables still use native Telegram Rich Message tables. For incomplete rows, values remain in their original order and are identified as incomplete rather than being attributed to the wrong headers.
+
+The final-answer renderer logs a metadata-only `final Telegram formatting` entry with `rawPipes`, `separatorPresent`, `richTableSelected`, and `rawLength`. This does **not** log the model's response text. On an affected agent, compare this log entry with any `Rich Message rejected` warning: `richTableSelected=false` means the source was not recognized as a complete table; `true` followed by a Rich rejection means the Bot API edit fell back to HTML. If the API accepted Rich, any remaining problem is in the client-side Rich display or actual model markup.
+
+No model or weather-data correctness claims are made by this formatter: the bot must still verify that geographic coordinates, time zone, and forecast source correspond to the requested location.
