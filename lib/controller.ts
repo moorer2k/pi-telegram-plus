@@ -989,6 +989,26 @@ export function createTelegramController(deps: {
   // Pending counts exclude the currently executing prompt. The generation
   // fence below invalidates queued work without interrupting an active turn.
   const pendingPromptCounts = new Map<string, number>();
+  // Telegram may redeliver a message after reconnect/failover. Bound the
+  // dedup cache so long-lived bots cannot accumulate unbounded message IDs.
+  const seenIncomingMessages = new Map<string, number>();
+  const MAX_SEEN_MESSAGES = 4096;
+  const INCOMING_DEDUP_TTL_MS = 60 * 60 * 1000;
+  const claimIncomingMessage = (chatId: number, messageId: number): boolean => {
+    const now = Date.now();
+    const key = String(chatId) + ":" + String(messageId);
+    const previous = seenIncomingMessages.get(key);
+    if (previous !== undefined && now - previous < INCOMING_DEDUP_TTL_MS) return false;
+    seenIncomingMessages.delete(key);
+    seenIncomingMessages.set(key, now);
+    // Insertion order provides a bounded, approximate LRU with no timers.
+    while (seenIncomingMessages.size > MAX_SEEN_MESSAGES) {
+      const oldest = seenIncomingMessages.keys().next().value;
+      if (oldest === undefined) break;
+      seenIncomingMessages.delete(oldest);
+    }
+    return true;
+  };
   // Increasing generation per chat/thread lets stop invalidate pending queue items.
   const interruptGenerationByTarget = new Map<string, number>();
 
@@ -1700,6 +1720,10 @@ export function createTelegramController(deps: {
       if (typeof chatId !== "number") return;
       const messageThreadId = message.message_thread_id;
       const sourceMessageId = message.message_id;
+      if (typeof sourceMessageId === "number" && !claimIncomingMessage(chatId, sourceMessageId)) {
+        ctrlLog.debug("duplicate telegram message suppressed", { chatId, messageThreadId, sourceMessageId });
+        return;
+      }
       const rawText = message.text ?? message.caption ?? "";
       ctrlLog.debug("incoming telegram message shape", {
         messageId: message.message_id,
