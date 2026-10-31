@@ -18,6 +18,7 @@ export class IsolatedSessionRegistry<T> {
   private readonly entries = new Map<string, Entry<T>>();
   private closed = false;
   private readonly owned = new Map<T, string>();
+  private readonly initializing = new Map<T, string>();
 
   constructor(
     private readonly create: (target: SessionTarget) => Promise<T>,
@@ -36,6 +37,8 @@ export class IsolatedSessionRegistry<T> {
     entry.disposeOnce = entry.pending.then(
       async (session) => {
         if (this.owned.get(session) === key) this.owned.delete(session);
+        if (this.initializing.get(session) === key) this.initializing.delete(session);
+        if (this.owned.has(session) || this.initializing.has(session)) return;
         await this.disposeSession(session);
       },
       () => undefined, // A rejected factory produced no session to dispose.
@@ -70,7 +73,7 @@ export class IsolatedSessionRegistry<T> {
       await this.retire(entry);
       throw new Error("Isolated session factory must return a unique session object");
     }
-    const existingOwner = this.owned.get(session);
+    const existingOwner = this.owned.get(session) ?? this.initializing.get(session);
     if (existingOwner && existingOwner !== key) {
       // Do not dispose an aliased session: another target still owns it.
       entry.retired = true;
@@ -89,6 +92,14 @@ export class IsolatedSessionRegistry<T> {
   async release(target: SessionTarget): Promise<void> {
     const entry = this.entries.get(IsolatedSessionRegistry.key(target));
     if (entry) await this.retire(entry);
+  }
+
+  has(target: SessionTarget): boolean {
+    return this.entries.has(IsolatedSessionRegistry.key(target));
+  }
+
+  size(): number {
+    return this.entries.size;
   }
 
   list(): SessionTarget[] {
