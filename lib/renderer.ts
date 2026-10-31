@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { escapeHtml } from "./html.ts";
 import { markdownToTelegramHtml } from "./markdown.ts";
-import { richMarkdownForTables } from "./rich-message.ts";
+import { richMarkdownForResponse } from "./rich-message.ts";
 import type { TelegramConfig, TelegramRenderLevel, TelegramTransport, TelegramTurn } from "./types.ts";
 import type { SecretStore } from "./tui/secrets.ts";
 import { RENDER_LEVELS } from "./types.ts";
@@ -680,7 +680,7 @@ ${partial}`);
       // the answer contains a real GFM table, prefer a Rich Message: Telegram
       // renders it as a native bordered table. Non-qualifying answers — and any
       // server without Rich Message support — keep the HTML path untouched.
-      const richMarkdown = richMarkdownForTables(body);
+      const richMarkdown = richMarkdownForResponse(body);
       renderLog.info("final Telegram formatting", {
         rawPipes: (body.match(/\|/g) ?? []).length,
         separatorPresent: /\|\s*:?-{2,}:?\s*\|/.test(body),
@@ -736,7 +736,7 @@ ${partial}`);
       const final = progress.messages.join("\n\n");
       progress.target = "";
       if (final) {
-        const richMarkdown = richMarkdownForTables(final);
+        const richMarkdown = richMarkdownForResponse(final);
         renderLog.info("final Telegram formatting", {
           rawPipes: (final.match(/\|/g) ?? []).length,
           separatorPresent: /\|\s*:?-{2,}:?\s*\|/.test(final),
