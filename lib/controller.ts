@@ -998,16 +998,25 @@ export function createTelegramController(deps: {
     // Do not retain completed queue chains for every chat/topic ever seen.
     // Identity check prevents an older completion from deleting a newer tail.
     void tail.finally(() => {
-      if (promptTails.get(key) === tail) promptTails.delete(key);
+      if (promptTails.get(key) === tail) {
+        promptTails.delete(key);
+        pruneQueueState(key);
+      }
     });
   };
   const getInterruptGeneration = (key: string): number => interruptGenerationByTarget.get(key) ?? 0;
+  const pruneQueueState = (key: string): void => {
+    if (!promptTails.has(key) && !pendingPromptCounts.has(key)) {
+      interruptGenerationByTarget.delete(key);
+    }
+  };
   const bumpInterruptGeneration = (key: string): void => {
     const next = getInterruptGeneration(key) + 1;
     interruptGenerationByTarget.set(key, next);
     // Invalidate the visible pending depth immediately. Older queued tasks
     // retain their captured generation and will be discarded at dispatch.
     pendingPromptCounts.delete(key);
+    pruneQueueState(key);
   };
 
   const fastInterrupt = async (chatId: number, messageThreadId?: number, sourceMessageId?: number) => {
