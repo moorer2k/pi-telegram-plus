@@ -343,6 +343,15 @@ export function createTelegramTransport(
   };
 
   return {
+    async sendDraft(chatId, draftId, text) {
+      if (!Number.isSafeInteger(chatId) || chatId <= 0) throw new Error("Telegram drafts require a private chat ID");
+      if (!Number.isSafeInteger(draftId) || draftId < 1) throw new Error("Invalid Telegram draft ID");
+      if (!text || Buffer.byteLength(text, "utf8") > 4096) throw new Error("Telegram draft exceeds 4096 bytes");
+      const lease = captureSendLease();
+      // Drafts are ephemeral and superseded by later updates; avoid retrying
+      // stale previews after transient failures or flood-control responses.
+      await callApi("sendMessageDraft", { chat_id: chatId, draft_id: draftId, text }, undefined, lease, { maxAttempts: 1 });
+    },
     async sendText(chatId, text, messageThreadId, replyToMessageId, richMarkdown, delivery) {
       const lease = captureSendLease();
       if (richMarkdown && richMessagesAvailable) {
