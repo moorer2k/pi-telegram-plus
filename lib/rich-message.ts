@@ -36,51 +36,28 @@ export function escapeRichMarkdown(text: string): string {
  * backslashes and only rewrite paired delimiters.
  */
 export function normalizeRichMathDelimiters(markdown: string): string {
+  const convert = (text: string): string => {
+    const math = (part: string): string => part
+      .replace(/(?<!\\)\\\[([\s\S]*?)(?<!\\)\\\]/g, (_all, body: string) => "$$" + body + "$$")
+      .replace(/(?<!\\)\\\(([\s\S]*?)(?<!\\)\\\)/g, (_all, body: string) => "$" + body + "$");
+    return text.split(/(`+[^`\n]*`+)/g).map((part, i) => i % 2 ? part : math(part)).join("");
+  };
+  const output: string[] = [];
+  let prose: string[] = [];
   let fence: { marker: string; width: number } | undefined;
-  let inDisplay = false;
-  let inInline = false;
-  return markdown.split("\n").map((line) => {
-    const fm = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
-    if (fm) {
-      const token = fm[1];
-      if (!fence && !(token[0] === "`" && fm[2].includes("`"))) {
-        fence = { marker: token[0], width: token.length };
-        return line;
-      }
-      if (fence && token[0] === fence.marker && token.length >= fence.width && !fm[2].trim()) {
-        fence = undefined;
-        return line;
-      }
-    }
-    if (fence) return line;
-    // Protect inline backtick spans from delimiter conversion.
-    const segments = line.split(/(`+[^`\n]*`+)/g);
-    return segments.map((segment, index) => {
-      if (index % 2 === 1) return segment;
-      return segment.replace(/(?<!\\)\\(\[|\]|\(|\))/g, (match, delimiter) => {
-        if (delimiter === "[") {
-          if (inInline || inDisplay) return match;
-          inDisplay = true;
-          return "$$";
-        }
-        if (delimiter === "]") {
-          if (!inDisplay) return match;
-          inDisplay = false;
-          return "$$";
-        }
-        if (delimiter === "(") {
-          if (inDisplay || inInline) return match;
-          inInline = true;
-          return "$";
-        }
-        if (!inInline) return match;
-        inInline = false;
-        return "$";
-      });
-    }).join("");
-  }).join("\n");
+  const flush = () => { if (prose.length) output.push(convert(prose.join("\n"))); prose = []; };
+  for (const line of markdown.split("\n")) {
+    const match = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+    if (!fence && match && !(match[1][0] === "`" && match[2].includes("`"))) {
+      flush(); fence = { marker: match[1][0], width: match[1].length }; output.push(line);
+    } else if (fence) {
+      output.push(line);
+      if (match && match[1][0] === fence.marker && match[1].length >= fence.width && !match[2].trim()) fence = undefined;
+    } else prose.push(line);
+  }
+  flush();
+  return output.join("\n");
 }
-
 /** Match fenced blocks by delimiter and minimum opening width. */
 function hasBalancedFences(markdown: string): boolean {
   let fence: { marker: string; width: number } | undefined;

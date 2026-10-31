@@ -272,3 +272,19 @@ describe("native Markdown client regressions", () => {
     expect(normalizeRichMathDelimiters(source)).toBe(source);
   });
 });
+
+describe("multiline math client regressions", () => {
+  const slash = String.fromCharCode(92);
+  it("converts complete multiline display math", () => {
+    const input = [slash + "[", slash + "int_0^" + slash + "infty e^{-x^2} dx", slash + "]"].join("\n");
+    expect(normalizeRichMathDelimiters(input)).toBe(["$$", slash + "int_0^" + slash + "infty e^{-x^2} dx", "$$"].join("\n"));
+  });
+  it("leaves unmatched math delimiters unchanged", () => {
+    const input = slash + "[unfinished";
+    expect(normalizeRichMathDelimiters(input)).toBe(input);
+  });
+  it("preserves fenced math as literal source", () => {
+    const input = ["```latex", slash + "[x" + slash + "]", "```"].join("\n");
+    expect(normalizeRichMathDelimiters(input)).toBe(input);
+  });
+});
