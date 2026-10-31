@@ -129,6 +129,9 @@ export function __resetSinkForTests(): void {
   sink.currentDate = undefined;
   sink.currentSize = 0;
   sink.dirReady = false;
+  errorSink.currentDate = "";
+  errorSink.currentSize = 0;
+  errorSink.ready = false;
 }
 
 function basePath(cfg: LoggerConfig, stamp: string): string {
@@ -196,6 +199,35 @@ function enqueue(cfg: LoggerConfig, line: string): void {
     .catch(() => undefined); // never let a logging error escape or break the chain
 }
 
+// Dedicated error-only log, rotated independently from the full event log.
+const errorSink = { queue: Promise.resolve(), currentDate: "" as string, currentSize: 0, ready: false };
+async function appendErrorLine(cfg: LoggerConfig, line: string): Promise<void> {
+  if (!cfg.enabled) return;
+  if (!errorSink.ready) {
+    await mkdir(cfg.dir, { recursive: true });
+    errorSink.ready = true;
+  }
+  const stamp = todayStamp();
+  const file = join(cfg.dir, `pi-telegram-plus-errors-${stamp}.log`);
+  if (errorSink.currentDate !== stamp) {
+    errorSink.currentDate = stamp;
+    errorSink.currentSize = await sizeOfFile(file);
+  }
+  const bytes = Buffer.byteLength(line);
+  if (errorSink.currentSize + bytes > cfg.maxFileSize && errorSink.currentSize > 0) {
+    for (let n = cfg.maxFiles - 1; n >= 1; n--) {
+      await rename(join(cfg.dir, `pi-telegram-plus-errors-${stamp}.${n}.log`), join(cfg.dir, `pi-telegram-plus-errors-${stamp}.${n + 1}.log`)).catch(() => undefined);
+    }
+    await rename(file, join(cfg.dir, `pi-telegram-plus-errors-${stamp}.1.log`)).catch(() => undefined);
+    errorSink.currentSize = 0;
+  }
+  await appendFile(file, line, { encoding: "utf8" });
+  errorSink.currentSize += bytes;
+}
+function enqueueError(cfg: LoggerConfig, line: string): void {
+  errorSink.queue = errorSink.queue.then(() => appendErrorLine(cfg, line)).catch(() => undefined);
+}
+
 // ---- Logger implementation ----
 
 class FileLogger implements Logger {
@@ -233,7 +265,11 @@ class FileLogger implements Logger {
       ...(this.scope ? { scope: this.scope } : {}),
       ...ensureFieldSafety(fields),
     };
-    enqueue(this.cfg, safeStringify(record) + "\n");
+    const line = safeStringify(record) + "\n";
+    enqueue(this.cfg, line);
+    // A dedicated error-only stream makes field diagnostics easy to share.
+    // Reuse the serialized sink so records remain ordered and never block Pi.
+    if (level === "error") enqueueError(this.cfg, line);
   }
 }
 
@@ -270,6 +306,9 @@ export function initLogger(options?: InitLoggerOptions): void {
   sink.currentDate = undefined;
   sink.currentSize = 0;
   sink.dirReady = false;
+  errorSink.currentDate = "";
+  errorSink.currentSize = 0;
+  errorSink.ready = false;
 }
 
 /** Read-only access to the resolved log directory (for /status diagnostics). */
@@ -294,6 +333,7 @@ export const log: Logger = new FileLogger(initialConfig);
  */
 export async function __drainAndListFiles(dir?: string): Promise<string[]> {
   await sink.queue.catch(() => undefined);
+  await errorSink.queue.catch(() => undefined);
   const target = dir ?? initialConfig.dir;
   try {
     const entries = await readdir(target);
