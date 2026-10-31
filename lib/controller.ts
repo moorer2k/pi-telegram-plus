@@ -993,6 +993,25 @@ export function createTelegramController(deps: {
   // the active turn or discarding other queued instructions.
   const pendingSourceMessages = new Map<string, Set<number>>();
   const cancelledSourceMessages = new Map<string, Set<number>>();
+  // Per-target pause gates: no timers, no polling, and no cross-chat effects.
+  const pausedQueues = new Set<string>();
+  const pauseWaiters = new Map<string, Set<() => void>>();
+  const resumeQueue = (key: string): boolean => {
+    const wasPaused = pausedQueues.delete(key);
+    const waiters = pauseWaiters.get(key);
+    pauseWaiters.delete(key);
+    for (const wake of waiters ?? []) wake();
+    return wasPaused;
+  };
+  const waitForQueueResume = async (key: string): Promise<void> => {
+    while (pausedQueues.has(key)) {
+      await new Promise<void>((resolve) => {
+        const waiters = pauseWaiters.get(key) ?? new Set<() => void>();
+        waiters.add(resolve);
+        pauseWaiters.set(key, waiters);
+      });
+    }
+  };
   // Telegram may redeliver a message after reconnect/failover. Bound the
   // dedup cache so long-lived bots cannot accumulate unbounded message IDs.
   const seenIncomingMessages = new Map<string, number>();
@@ -1044,6 +1063,7 @@ export function createTelegramController(deps: {
     pendingPromptCounts.delete(key);
     pendingSourceMessages.delete(key);
     cancelledSourceMessages.delete(key);
+    resumeQueue(key);
     pruneQueueState(key);
   };
 
@@ -1335,6 +1355,7 @@ export function createTelegramController(deps: {
         // The queued item is no longer pending once its dispatch slot starts.
         // A clear/stop invalidates the previous generation. Never subtract an
         // obsolete task from the count of messages queued after that clear.
+        await waitForQueueResume(key);
         if (generation !== getInterruptGeneration(key)) {
           // A clear/stop already reset the visible pending count. Discard
           // stale cancellation tombstones as their old queue slots drain.
@@ -1940,6 +1961,20 @@ export function createTelegramController(deps: {
         }
         return;
       }
+      if (trimmed === "/queue pause") {
+        const key = targetKey(chatId, messageThreadId);
+        pausedQueues.add(key);
+        ctrlLog.info("telegram queue paused", { chatId, messageThreadId });
+        await deps.transport.sendText(chatId, "Queue paused for this chat/topic. Active work continues. Use /queue resume to dispatch pending messages.", messageThreadId, sourceMessageId);
+        return;
+      }
+      if (trimmed === "/queue resume") {
+        const key = targetKey(chatId, messageThreadId);
+        const resumed = resumeQueue(key);
+        ctrlLog.info("telegram queue resume requested", { chatId, messageThreadId, resumed });
+        await deps.transport.sendText(chatId, resumed ? "Queue resumed." : "Queue was not paused.", messageThreadId, sourceMessageId);
+        return;
+      }
       if (trimmed === "/queue list") {
         const key = targetKey(chatId, messageThreadId);
         const pendingIds = pendingSourceMessages.get(key);
@@ -2005,7 +2040,7 @@ export function createTelegramController(deps: {
           await deps.transport.sendText(chatId, `Cleared ${pending} queued message(s). Active work was not interrupted.`, messageThreadId, sourceMessageId);
         } else {
           const active = deps.getActiveTurn(chatId, messageThreadId) !== undefined;
-          await deps.transport.sendText(chatId, `Queue: ${pending} pending message(s). Active Telegram turn: ${active ? "yes" : "no"}. Use /queue clear to discard waiting messages.`, messageThreadId, sourceMessageId);
+          await deps.transport.sendText(chatId, `Queue: ${pending} pending message(s). Active Telegram turn: ${active ? "yes" : "no"}. Dispatch: ${pausedQueues.has(key) ? "paused" : "running"}. Use /queue pause, /queue resume, or /queue clear.`, messageThreadId, sourceMessageId);
         }
         return;
       }
