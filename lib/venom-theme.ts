@@ -3,15 +3,12 @@ import type { VenomThemeOptions } from "./types.ts";
  * Frames are activity pulses, not estimates of task completion.
  * No HTML escaping here; the renderer owns escaping of untrusted tool text.
  */
-export const VENOM_PULSE_FRAMES = [
-  { eye: "◐", pulse: "▱▱▱▱▱▱" },
-  { eye: "◓", pulse: "▰▱▱▱▱▱" },
-  { eye: "◑", pulse: "▰▰▱▱▱▱" },
-  { eye: "◒", pulse: "▰▰▰▱▱▱" },
-  { eye: "◐", pulse: "▰▰▰▰▱▱" },
-  { eye: "◓", pulse: "▰▰▰▰▰▱" },
-  { eye: "◑", pulse: "▰▰▰▰▰▰" },
-] as const;
+/** 12-cell symbiote activity sweep; not a task-completion estimate. */
+export const VENOM_PULSE_WIDTH = 12;
+export const VENOM_PULSE_FRAMES = Array.from({ length: VENOM_PULSE_WIDTH + 1 }, (_, filled) => ({
+  eye: ["◐", "◓", "◑", "◒"][filled % 4],
+  pulse: "▰".repeat(filled) + "▱".repeat(VENOM_PULSE_WIDTH - filled),
+}));
 
 export type VenomActivity = "awakening" | "tracking" | "examining" | "testing" | "adapting" | "hunting";
 
@@ -424,7 +421,8 @@ export function formatVenomRichLivePanel(
       ? " " + (Math.max(0, op.finishedAt - op.startedAt) / 1000).toFixed(1) + "s" : "";
     const state = options?.showOperationStates === false ? "" : " · " + op.state.toUpperCase() + duration;
     const detail = venomRichShort(op.detail || op.tool, VENOM_RICH_DETAIL_WIDTH);
-    return "- **" + tag + escaped(state) + "**\n  " + escaped(detail);
+    const glyph = op.state === "failed" ? "×" : op.state === "done" ? "◆" : "◈";
+    return "- **" + glyph + " " + tag + escaped(state) + "**\n  " + escaped(detail);
   };
   const slots = [...recent.map(line)];
   if (options?.fixedOperationRows !== false) {
@@ -444,12 +442,12 @@ export function formatVenomRichLivePanel(
     "\n\n</details>";
 
   // The anchor establishes the same minimum visible line width on every frame.
-  // The animated six-segment pulse retains its independent line immediately
+  // The animated twelve-segment pulse retains its independent line immediately
   // below; it does not attempt to communicate percent task completion.
   return "**" + escaped(venomRichShort(meta.title, 38)) + "**\n\n" +
     "\`" + VENOM_RICH_WIDTH_ANCHOR + "\`\n\n" +
-    escaped(venomRichShort(meta.status, 36)) + "\n\n" +
-    (options?.showPulse === false ? "" : "\`" + (meta.pulse || "▱▱▱▱▱▱") + "\`\n\n") +
+    "**◈ " + escaped(venomRichShort(meta.status, 32)) + "**\n\n" +
+    (options?.showPulse === false ? "" : "\`" + (meta.pulse || "▱".repeat(VENOM_PULSE_WIDTH)) + "\`\n\n") +
     "## " + escaped(meta.section) + "\n\n" + slots.join("\n") + history +
     (options?.showObjective === false ? "" :
       "\n\n## " + escaped(meta.transmission) + "\n\n" + escaped(venomRichShort(meta.objective, VENOM_RICH_META_WIDTH))) +
@@ -463,7 +461,7 @@ export function formatVenomRichInitialPanel(options?: VenomThemeOptions): string
   return formatVenomRichLivePanel([], options, {
     title: venomThemeText(options?.title, VENOM_DEFAULTS.title),
     status: venomThemeLabel("awakening", options),
-    pulse: "▱▱▱▱▱▱",
+    pulse: "▱".repeat(VENOM_PULSE_WIDTH),
     section: venomSectionTitle(options),
     transmission: venomTransmissionTitle(options),
     objective: "Standing by for next signal",
