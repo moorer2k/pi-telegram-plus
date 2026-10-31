@@ -250,6 +250,45 @@ export function normalizeFlattenedTables(markdown: string): string {
   return output.join("\n");
 }
 
+/** Separate a tight bullet group from trailing prose even when the model
+ * omitted the blank line. Require at least two consecutive top-level bullets
+ * to avoid turning an intentional single-item continuation into a paragraph.
+ * Never rewrite fenced code or indented list continuations. */
+export function normalizeListParagraphSpacing(markdown: string): string {
+  const lines = markdown.split("\n");
+  const out: string[] = [];
+  let inFence = false;
+  let fenceChar = "";
+  let consecutiveBullets = 0;
+  for (const line of lines) {
+    const fence = fenceMarker(line);
+    if (fence) {
+      if (!inFence) { inFence = true; fenceChar = fence; }
+      else if (fenceChar === fence) { inFence = false; fenceChar = ""; }
+      consecutiveBullets = 0;
+      out.push(line);
+      continue;
+    }
+    if (inFence) { out.push(line); continue; }
+    if (!line.trim()) { consecutiveBullets = 0; out.push(line); continue; }
+    const bullet = /^(?:[-*+]\s+|\d+[.)]\s+)/.test(line);
+    if (bullet) {
+      consecutiveBullets++;
+      out.push(line);
+      continue;
+    }
+    // Unindented prose after two or more list items is generally a new
+    // paragraph. Do not touch nested content, headings, quotes or tables.
+    if (consecutiveBullets >= 2 && !/^\s/.test(line) &&
+        !/^(?:[#>|]|-{3,}|\*{3,}|_{3,})/.test(line)) {
+      out.push("");
+    }
+    consecutiveBullets = 0;
+    out.push(line);
+  }
+  return out.join("\n");
+}
+
 /**
  * True when `markdown` contains a real GFM table — a row containing a pipe
  * followed by a `| --- |` separator — outside code fences.
@@ -473,7 +512,7 @@ const renderer = {
           return prefix + line;
         }).join("\n");
       });
-      return lines.join("\n") + "\n";
+      // Match paragraph spacing: leave a blank line after the list.\n      return lines.join("\n") + "\n\n";
     } finally {
       _listDepth--;
     }
@@ -549,7 +588,7 @@ export function markdownToTelegramHtml(markdown: string): string {
   // marked renders them as <pre><code> — preserving column alignment in
   // Telegram's monospace font instead of mangling pipes in a proportional-font
   // paragraph. Real markdown tables (with a separator) are left for marked.
-  const protected_ = protectPseudoTables(normalizeFlattenedTables(markdown));
+  const protected_ = protectPseudoTables(normalizeFlattenedTables(normalizeListParagraphSpacing(markdown)));
   return (marked.parse(protected_, { async: false }) as string).replace(/\n+$/, "");
 }
 
