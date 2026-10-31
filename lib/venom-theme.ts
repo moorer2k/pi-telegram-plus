@@ -197,7 +197,7 @@ export function formatVenomCompactOperations(
   const selected = lines.slice(-size);
   if (!selected.length) return "<i>" + escape(venomThemeText(options?.awaitingText, VENOM_DEFAULTS.awaitingText)) + "</i>";
   return selected.map(line => {
-    const match = /^\\[([A-Z]+)\\]\\s*(.*)$/.exec(line);
+    const match = /^\[([A-Z]+)\]\s*(.*)$/.exec(line);
     const label = match?.[1];
     const detail = (match?.[2] ?? line).slice(0, 110);
     return label && /^(RECON|READ|PATCH|VERIFY|EXEC|TRACE|ERROR)$/.test(label)
