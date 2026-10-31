@@ -37,4 +37,33 @@ describe("isolated session lifecycle", () => {
     expect(disposed).toEqual([1, 2]);
     await expect(registry.get({ chatId: 2 })).rejects.toThrow("closed");
   });
+  it("disposes a pending session exactly once when released during initialization", async () => {
+    let resolveCreate!: (session: { id: number }) => void;
+    const create = vi.fn(() => new Promise<{ id: number }>((resolve) => { resolveCreate = resolve; }));
+    const disposeSession = vi.fn(async () => {});
+    const registry = new IsolatedSessionRegistry(create, disposeSession);
+    const first = registry.get({ chatId: 10 });
+    const second = registry.get({ chatId: 10 });
+    await Promise.resolve();
+    const release = registry.release({ chatId: 10 });
+    resolveCreate({ id: 10 });
+    await expect(first).rejects.toThrow("released");
+    await expect(second).rejects.toThrow("released");
+    await release;
+    expect(disposeSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not dispose the replacement session after an earlier release", async () => {
+    const disposeSession = vi.fn(async () => {});
+    let next = 0;
+    const registry = new IsolatedSessionRegistry(async () => ({ id: ++next }), disposeSession);
+    const first = await registry.get({ chatId: 1 });
+    await registry.release({ chatId: 1 });
+    const second = await registry.get({ chatId: 1 });
+    expect(first.session).not.toBe(second.session);
+    expect(disposeSession).toHaveBeenCalledTimes(1);
+    await registry.dispose();
+    expect(disposeSession).toHaveBeenCalledTimes(2);
+  });
+
 });
