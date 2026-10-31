@@ -75,6 +75,26 @@ describe("rich edit fallback failures", () => {
   });
 });
 
+describe("unsupported rich edit capability", () => {
+  let priorFetch: FetchImpl;
+  beforeEach(() => { priorFetch = globalThis.fetch; __resetRichMessagesForTests(); });
+  afterEach(() => { globalThis.fetch = priorFetch; __resetRichMessagesForTests(); });
+
+  it("falls back to HTML and skips later unsupported Rich calls", async () => {
+    const methods: string[] = [];
+    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
+      const method = String(input).split("/").pop()!;
+      methods.push(method);
+      if (methods.length === 1) return telegramResponse(false, false, "Bad Request: unknown method");
+      return telegramResponse(true, { message_id: 123 });
+    }) as unknown as FetchImpl;
+    const { transport } = makeTransport();
+    await transport.editText(123, 456, "<b>first</b>", "**first**");
+    await transport.sendText(123, "<b>second</b>", undefined, undefined, "**second**");
+    expect(methods).toEqual(["editMessageText", "editMessageText", "sendMessage"]);
+  });
+});
+
 describe("local Bot API attachment downloads", () => {
   let priorFetch: FetchImpl;
   beforeEach(() => { priorFetch = globalThis.fetch; });
