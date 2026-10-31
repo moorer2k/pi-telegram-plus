@@ -1130,12 +1130,21 @@ export function createTelegramController(deps: {
         }
         continue;
       }
+      // isStreaming can lag behind Pi's command-context busy state. Check
+      // both before dispatch so held messages cannot enter a busy session.
+      if (idleFn && !idleFn.call(ctx)) {
+        await sendHeldNotice();
+        await sleep(120);
+        continue;
+      }
       try {
         await session.prompt(text, { source: "interactive" });
         return;
       } catch (err) {
-        // A goal continuation or workflow step may have started between our
-        // idle check and prompt dispatch. Loop and wait again.
+        // Only retry a genuine busy-state race. Other prompt failures are
+        // permanent for this delivery and belong in the error log.
+        const busy = Boolean(session.isStreaming) || Boolean(idleFn && !idleFn.call(ctx));
+        if (!busy) throw err;
         ctrlLog.debug("main-delivery prompt raced with a new turn; waiting again", { chatId, messageThreadId, attempt, err });
         await sleep(120);
       }
