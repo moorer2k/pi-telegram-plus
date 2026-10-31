@@ -9,7 +9,7 @@ import type { TelegramConfig, TelegramRenderLevel, TelegramTransport, TelegramTu
 import type { SecretStore } from "./tui/secrets.ts";
 import { RENDER_LEVELS } from "./types.ts";
 import { log } from "./logger.ts";
-import { venomActivity, venomThemeFrame, venomThemeLabel, venomThemeNumber, venomThemeText, formatVenomContextUsage, formatVenomFooter, formatVenomConsole, formatVenomTerminalBlock, VENOM_DEFAULTS, venomSectionTitle, venomTransmissionTitle, venomToolLine, venomCompletionLabel, formatVenomTelemetry, formatVenomActivityHistory, formatVenomOperationState, isVenomHud, type VenomActivity } from "./venom-theme.ts";
+import { venomActivity, venomThemeFrame, venomThemeLabel, venomThemeNumber, venomThemeText, formatVenomContextUsage, formatVenomFooter, VENOM_DEFAULTS, venomSectionTitle, venomTransmissionTitle, venomToolLine, venomCompletionLabel, formatVenomTelemetry, formatVenomActivityHistory, formatVenomOperationState, type VenomActivity } from "./venom-theme.ts";
 
 const renderLog = log.child("renderer");
 
