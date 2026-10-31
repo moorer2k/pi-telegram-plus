@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createTelegramController, EXPIRED_TUI_CALLBACK_PREFIX, type TelegramController } from "../controller.ts";
+import { createTelegramController, useHostPromptsForCommand, EXPIRED_TUI_CALLBACK_PREFIX, type TelegramController } from "../controller.ts";
 import { CommandGateway } from "../tui/gateway.ts";
 import { DialogBroker } from "../tui/broker.ts";
 import type { CapturedAgentSession, TelegramTransport } from "../types.ts";
@@ -92,6 +92,18 @@ const send = async (controller: TelegramController, text: string) => {
     text,
   });
 };
+
+describe("plugin management prompt ownership", () => {
+  it("keeps /tg input prompts native even when a host DialogBroker is available", () => {
+    expect(useHostPromptsForCommand("tg", true)).toBe(false);
+    expect(useHostPromptsForCommand("tg", false)).toBe(false);
+  });
+
+  it("preserves host-owned dialogs for other commands", () => {
+    expect(useHostPromptsForCommand("goals", true)).toBe(true);
+    expect(useHostPromptsForCommand("goals", false)).toBe(false);
+  });
+});
 
 describe("Command routing after the mirror removal (D2)", () => {
   it("routes a catalog host command through the gateway, not the mirror", async () => {
