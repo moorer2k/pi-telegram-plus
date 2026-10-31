@@ -37,6 +37,24 @@ async function readTodayLog(dir: string): Promise<string> {
   return readFile(base, "utf8");
 }
 
+describe("missing Rich edit target recovery", () => {
+  let priorFetch: FetchImpl;
+  beforeEach(() => { priorFetch = globalThis.fetch; __resetRichMessagesForTests(); });
+  afterEach(() => { globalThis.fetch = priorFetch; __resetRichMessagesForTests(); });
+
+  it("propagates a missing edit target without attempting HTML or plain edits", async () => {
+    const calls: string[] = [];
+    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
+      const method = String(input).split("/").pop()!;
+      calls.push(method);
+      return telegramResponse(false, false, "Bad Request: message to edit not found");
+    }) as unknown as FetchImpl;
+    const { transport } = makeTransport();
+    await expect(transport.editText(123, 456, "<b>answer</b>", "| Day | High |\\n| --- | --- |\\n| Fri | 52 |")).rejects.toThrow(/message to edit not found/i);
+    expect(calls).toEqual(["editMessageText"]);
+  });
+});
+
 describe("local Bot API attachment downloads", () => {
   let priorFetch: FetchImpl;
   beforeEach(() => { priorFetch = globalThis.fetch; });
