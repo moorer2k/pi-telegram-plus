@@ -993,7 +993,14 @@ export function createTelegramController(deps: {
   const interruptGenerationByTarget = new Map<string, number>();
 
   const getOrCreateTail = (key: string): Promise<void> => promptTails.get(key) ?? Promise.resolve();
-  const setTail = (key: string, tail: Promise<void>) => promptTails.set(key, tail);
+  const setTail = (key: string, tail: Promise<void>) => {
+    promptTails.set(key, tail);
+    // Do not retain completed queue chains for every chat/topic ever seen.
+    // Identity check prevents an older completion from deleting a newer tail.
+    void tail.finally(() => {
+      if (promptTails.get(key) === tail) promptTails.delete(key);
+    });
+  };
   const getInterruptGeneration = (key: string): number => interruptGenerationByTarget.get(key) ?? 0;
   const bumpInterruptGeneration = (key: string): void => {
     const next = getInterruptGeneration(key) + 1;
@@ -1784,6 +1791,12 @@ export function createTelegramController(deps: {
         const key = targetKey(chatId, messageThreadId);
         const pending = pendingPromptCounts.get(key) ?? 0;
         if (trimmed === "/queue all") {
+          // Global queue state is owner-only even when group members may submit
+          // prompts; otherwise a group user can observe other chats' activity.
+          if (!ownerAuthorized) {
+            await deps.transport.sendText(chatId, "Only the bot owner can inspect all chat queues.", messageThreadId, sourceMessageId);
+            return;
+          }
           // Aggregate counts only; do not expose other chats' messages or IDs.
           const total = [...pendingPromptCounts.values()].reduce((sum, count) => sum + count, 0);
           await deps.transport.sendText(chatId, `Pending across active chat/topic queues: ${total}.`, messageThreadId, sourceMessageId);
