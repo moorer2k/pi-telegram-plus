@@ -458,3 +458,40 @@ describe("createTelegramTransport — Rich Messages (native Markdown tables)", (
     expect(calls[1].body).toMatchObject({ parse_mode: "HTML", text: "<b>Project</b>" });
   });
 });
+
+describe("native Telegram draft transport", () => {
+  let previousFetch: FetchImpl;
+  beforeEach(() => { previousFetch = globalThis.fetch; });
+  afterEach(() => { globalThis.fetch = previousFetch; });
+
+  it("submits a private-chat draft through the Bot API without a message edit", async () => {
+    const calls: Array<{ url: string; body: Record<string, unknown> }> = [];
+    globalThis.fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      calls.push({ url: String(input), body: JSON.parse(String(init?.body)) });
+      return telegramResponse(true, true);
+    }) as unknown as FetchImpl;
+    const { transport } = makeTransport();
+    await transport.sendDraft!(12345, 7, "Streaming preview");
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toMatch(/\/sendMessageDraft$/);
+    expect(calls[0].body).toMatchObject({ chat_id: 12345, draft_id: 7, text: "Streaming preview" });
+  });
+
+  it("rejects group IDs, invalid draft IDs, and oversized payloads without network calls", async () => {
+    const fetchSpy = vi.fn();
+    globalThis.fetch = fetchSpy as unknown as FetchImpl;
+    const { transport } = makeTransport();
+    await expect(transport.sendDraft!(-100123, 1, "hello")).rejects.toThrow(/private chat/i);
+    await expect(transport.sendDraft!(123, 0, "hello")).rejects.toThrow(/draft ID/i);
+    await expect(transport.sendDraft!(123, 1, "x".repeat(4097))).rejects.toThrow(/4096 bytes/i);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("does not retry transient draft failures", async () => {
+    const fetchSpy = vi.fn(async () => telegramResponse(false, false, "Bad Request: draft not supported"));
+    globalThis.fetch = fetchSpy as unknown as FetchImpl;
+    const { transport } = makeTransport();
+    await expect(transport.sendDraft!(123, 1, "preview")).rejects.toThrow();
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+});
