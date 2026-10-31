@@ -69,3 +69,11 @@ Tool labels describe observed operations, never fictional stages. The animated p
 Blacksite now uses Telegram's native HTML formatting for visual hierarchy: bold header and active status, underlined terminal heading, a single preformatted monospace tool block, a native blockquote around the current assistant transmission, and compact inline-code/italic telemetry. No color or client theme override is attempted. Plain Lethal Protector and Minimal Terminal retain their existing output.
 
 Progress updates remain edits of the existing Telegram message. All dynamic tool and assistant content is HTML-escaped before insertion, link preview behavior is unchanged, and existing theme settings require no migration.
+
+## Blacksite mobile polish
+
+Blacksite progress cards now use compact native Telegram `<code>` rows with bold operation labels rather than one bulky `<pre>` / COPY CODE panel. Status labels and terminal headings use bold emphasis. The optional assistant transmission is a native quote, expandable when long. Telemetry remains two short lines.
+
+The symbiote pulse is purely an activity animation: six cells fill consecutively from zero to six, then reset to zero. The displayed frame is calculated from elapsed time and `animationIntervalMs`, so unrelated tool events cannot jump the animation backwards. It is **not** a completion-percentage meter.
+
+Final replies already pass through the Markdown-to-Telegram HTML renderer (headings, emphasis, inline code, lists, quotes, hyperlinks, code fences). GFM tables can use Telegram Rich Messages when the API supports them, with a plain HTML fallback; non-tabular replies do not blindly use Rich Messages. Telegram controls bubble fonts, colors and copy-code behavior. No bot-side formatting can change those.
