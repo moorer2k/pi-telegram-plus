@@ -91,7 +91,7 @@ describe("local Bot API attachment downloads", () => {
     globalThis.fetch = mockFetch as unknown as FetchImpl;
     const data = await downloadTelegramFile("token", "photos/file 1.jpg", undefined, "http://localhost:8081");
     expect(data).toEqual(Buffer.from([9, 8]));
-    expect(mockFetch.mock.calls[0]?.[0]).toBe("http://localhost:8081/file/bottoken/photos/file%201.jpg");
+    expect(mockFetch).toHaveBeenCalledWith("http://localhost:8081/file/bottoken/photos/file%201.jpg", expect.anything());
   });
 });
 
