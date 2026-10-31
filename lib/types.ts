@@ -272,7 +272,7 @@ export type TelegramTransport = {
     replyToMessageId?: number,
   ): Promise<TelegramSentMessage>;
   /** Best-effort native Rich draft preview; false when unsupported or rejected. */
-  sendRichDraft(chatId: number, draftId: number, markdown: string, messageThreadId?: number): Promise<boolean>;
+  sendRichDraft?(chatId: number, draftId: number, markdown: string, messageThreadId?: number): Promise<boolean>;
   /** See `sendText` for `richMarkdown`. */
   editText(chatId: number, messageId: number, text: string, richMarkdown?: string): Promise<void>;
   editButtons(chatId: number, messageId: number, text: string, rows: TelegramButton[][]): Promise<void>;
