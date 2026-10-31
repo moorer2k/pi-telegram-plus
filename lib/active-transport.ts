@@ -47,6 +47,13 @@ export function createActiveTelegramTransport(
         sendPhoto: (chatId, data, caption, isPath, signal, messageThreadId, replyToMessageId) => run<void>(undefined, () => (
             transport.sendPhoto(chatId, data, caption, isPath, signal, messageThreadId, replyToMessageId)
         )),
+        // Preserve optional draft support through the active-instance gate.
+        // Drafts must not escape from a standby instance after lease failover.
+        ...(transport.sendDraft ? {
+            sendDraft: (chatId: number, draftId: number, text: string) => run<void>(undefined, () => (
+                transport.sendDraft!(chatId, draftId, text)
+            )),
+        } : {}),
         sendChatAction: (chatId, action, messageThreadId) => run<void>(undefined, () => (
             transport.sendChatAction(chatId, action, messageThreadId)
         )),
