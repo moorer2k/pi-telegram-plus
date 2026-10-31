@@ -1336,6 +1336,12 @@ export function createTelegramController(deps: {
         // A clear/stop invalidates the previous generation. Never subtract an
         // obsolete task from the count of messages queued after that clear.
         if (generation !== getInterruptGeneration(key)) {
+          // A clear/stop already reset the visible pending count. Discard
+          // stale cancellation tombstones as their old queue slots drain.
+          if (sourceMessageId !== undefined) {
+            cancelledSourceMessages.get(key)?.delete(sourceMessageId);
+            if (cancelledSourceMessages.get(key)?.size === 0) cancelledSourceMessages.delete(key);
+          }
           ctrlLog.info("queued telegram prompt discarded", { chatId, messageThreadId, sourceMessageId, reason: "generation invalidated" });
           return;
         }
@@ -1344,6 +1350,8 @@ export function createTelegramController(deps: {
           if (pendingSourceMessages.get(key)?.size === 0) pendingSourceMessages.delete(key);
           const cancelled = cancelledSourceMessages.get(key);
           if (cancelled?.delete(sourceMessageId)) {
+            // /queue cancel already decremented the visible pending depth.
+            // Do not decrement it again when the cancelled slot is reached.
             if (cancelled.size === 0) cancelledSourceMessages.delete(key);
             ctrlLog.info("queued telegram prompt individually cancelled", { chatId, messageThreadId, sourceMessageId });
             return;
@@ -1935,7 +1943,8 @@ export function createTelegramController(deps: {
       if (trimmed === "/queue cancel" || trimmed.startsWith("/queue cancel ")) {
         const key = targetKey(chatId, messageThreadId);
         const argument = trimmed.slice("/queue cancel".length).trim();
-        const target = argument ? Number(argument) : message.reply_to_message?.message_id;
+        // Reject numeric coercions such as hex, scientific notation or spaces.
+        const target = argument ? (/^[1-9][0-9]*$/.test(argument) ? Number(argument) : NaN) : message.reply_to_message?.message_id;
         if (!Number.isSafeInteger(target) || (target ?? 0) <= 0) {
           await deps.transport.sendText(chatId, "Usage: reply to a queued message with /queue cancel, or use /queue cancel <message_id>.", messageThreadId, sourceMessageId);
           return;
