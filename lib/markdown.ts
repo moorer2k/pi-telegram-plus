@@ -250,6 +250,40 @@ export function normalizeFlattenedTables(markdown: string): string {
   return output.join("\n");
 }
 
+/** Recover flattened tables even when the source itself has line breaks
+ * between the compressed header, separator, and data rows. */
+export function normalizeWrappedFlattenedTables(markdown: string): string {
+  const lines = markdown.split("\n");
+  const out: string[] = [];
+  let inFence = false;
+  let fenceChar = "";
+  for (let i = 0; i < lines.length;) {
+    const line = lines[i];
+    const marker = fenceMarker(line);
+    if (marker) {
+      if (!inFence) { inFence = true; fenceChar = marker; }
+      else if (fenceChar === marker) { inFence = false; fenceChar = ""; }
+      out.push(line); i++; continue;
+    }
+    if (inFence || !line.includes("|")) { out.push(line); i++; continue; }
+    const direct = normalizeFlattenedTables(line);
+    if (direct !== line) { out.push(direct); i++; continue; }
+    let recovered: string | undefined;
+    let consumed = 0;
+    for (let n = 2; n <= 4 && i + n <= lines.length; n++) {
+      const group = lines.slice(i, i + n);
+      if (group.some(part => !part.trim() || !part.includes("|") || fenceMarker(part))) break;
+      const joined = group.join(" ");
+      const normalized = normalizeFlattenedTables(joined);
+      if (normalized !== joined && hasGfmTable(normalized)) {
+        recovered = normalized; consumed = n; break;
+      }
+    }
+    if (recovered) { out.push(recovered); i += consumed; }
+    else { out.push(line); i++; }
+  }
+  return out.join("\n");
+}
 /** Separate a tight bullet group from trailing prose even when the model
  * omitted the blank line. Require at least two consecutive top-level bullets
  * to avoid turning an intentional single-item continuation into a paragraph.
@@ -588,7 +622,7 @@ export function markdownToTelegramHtml(markdown: string): string {
   // marked renders them as <pre><code> — preserving column alignment in
   // Telegram's monospace font instead of mangling pipes in a proportional-font
   // paragraph. Real markdown tables (with a separator) are left for marked.
-  const protected_ = protectPseudoTables(normalizeFlattenedTables(normalizeListParagraphSpacing(markdown)));
+  const protected_ = protectPseudoTables(normalizeWrappedFlattenedTables(normalizeListParagraphSpacing(markdown)));
   return (marked.parse(protected_, { async: false }) as string).replace(/\n+$/, "");
 }
 
