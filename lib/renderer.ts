@@ -478,7 +478,7 @@ export function registerTelegramRenderer(
       await deps.transport.editText(turn.chatId, turn.replaceMessageId, html, richMarkdown);
     } catch (err) {
       // Edit failed (message deleted / too many edits). Fall back to a new message.
-      renderLog.debug("editText failed; falling back to sendText", { chatId: turn.chatId, messageId: turn.replaceMessageId, err });
+      renderLog.warn("editText failed; sending complete answer as new message", { chatId: turn.chatId, messageId: turn.replaceMessageId, err });
       turn.replaceMessageId = undefined;
       await deps.transport.sendText(turn.chatId, html, turn.messageThreadId, turn.sourceMessageId, richMarkdown);
     }
