@@ -55,6 +55,26 @@ describe("missing Rich edit target recovery", () => {
   });
 });
 
+describe("rich edit fallback failures", () => {
+  let priorFetch: FetchImpl;
+  beforeEach(() => { priorFetch = globalThis.fetch; __resetRichMessagesForTests(); });
+  afterEach(() => { globalThis.fetch = priorFetch; __resetRichMessagesForTests(); });
+
+  it("propagates failure after rich, HTML and plain edit all fail", async () => {
+    const calls: Array<Record<string, unknown>> = [];
+    globalThis.fetch = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      calls.push(JSON.parse(String(init?.body)));
+      return telegramResponse(false, false, "Bad Request: can't parse entities");
+    }) as unknown as FetchImpl;
+    const { transport } = makeTransport();
+    await expect(transport.editText(123, 456, "<b>answer</b>", "answer")).rejects.toThrow(/parse entities/i);
+    expect(calls).toHaveLength(3);
+    expect(calls[0]).toHaveProperty("rich_message");
+    expect(calls[1]).toHaveProperty("parse_mode", "HTML");
+    expect(calls[2]).not.toHaveProperty("parse_mode");
+  });
+});
+
 describe("local Bot API attachment downloads", () => {
   let priorFetch: FetchImpl;
   beforeEach(() => { priorFetch = globalThis.fetch; });
