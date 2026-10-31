@@ -109,6 +109,33 @@ export const VENOM_PRESETS = {
       hunting: "ACTIVE HUNT",
     },
   },
+  "symbiote-hud": {
+    sectionTitle: "SYMBIOTE ACTIVITY",
+    transmissionTitle: "NEURAL LINK",
+    labels: {
+      awakening: "LINK ESTABLISHED", tracking: "ACQUIRING TARGET",
+      examining: "ANALYZING TARGET", testing: "VERIFYING TARGET",
+      adapting: "SYMBIOTE ADAPTING", hunting: "HUNT ACTIVE",
+    },
+  },
+  "predator-terminal": {
+    sectionTitle: "TERMINAL",
+    transmissionTitle: "OUTPUT",
+    labels: {
+      awakening: "INITIALIZING", tracking: "RECON",
+      examining: "READING", testing: "VERIFYING",
+      adapting: "RECOVERING", hunting: "EXECUTING",
+    },
+  },
+  classified: {
+    sectionTitle: "ACTIVITY LOG",
+    transmissionTitle: "INTELLIGENCE REPORT",
+    labels: {
+      awakening: "ACCESS GRANTED", tracking: "TARGET ACQUIRED",
+      examining: "DEEP ANALYSIS", testing: "VERIFICATION",
+      adapting: "COUNTERMEASURES", hunting: "OPERATION ACTIVE",
+    },
+  },
   "minimal-terminal": {
     sectionTitle: "TERMINAL",
     transmissionTitle: "RESPONSE",
@@ -247,4 +274,40 @@ export function formatVenomTelemetry(
 /** Wrap HTML-escaped console lines in one native Telegram code block. */
 export function formatVenomTerminalBlock(escapedInlineCode: string): string {
   return "<pre>" + escapedInlineCode.replaceAll("<code>", "").replaceAll("</code>", "") + "</pre>";
+}
+
+/** A bounded, deterministic set of latest operations and optional older history.
+ * The plain and expandable paths share one data source. */
+export function formatVenomActivityHistory(
+  lines: readonly string[],
+  escape: (text: string) => string,
+  options?: VenomThemeOptions,
+): string {
+  const count = venomThemeNumber(options?.visibleOperations, 3, 1, 12);
+  const newest = lines.slice(-count);
+  const older = lines.slice(0, Math.max(0, lines.length - count));
+  const prefix = venomThemeText(options?.consolePrefix, VENOM_DEFAULTS.consolePrefix, 8);
+  const formatLine = (line: string): string => {
+    const match = /^\\[([A-Z]+)\\]\\s*(.*)$/.exec(line);
+    const tag = match?.[1];
+    const raw = match?.[2] ?? line;
+    const detail = options?.operationDetail === "full" ? raw.slice(0, 140) : raw.slice(0, 75);
+    return tag && /^(RECON|READ|PATCH|VERIFY|EXEC|TRACE|ERROR)$/.test(tag)
+      ? "<b>[" + tag + "]</b> <code>" + escape(prefix + " " + detail) + "</code>"
+      : "<code>" + escape(prefix + " " + detail) + "</code>";
+  };
+  if (!newest.length) return "<i>" + escape(venomThemeText(options?.awaitingText, VENOM_DEFAULTS.awaitingText)) + "</i>";
+  const current = newest.map(formatLine).join("\n");
+  if (options?.collapseOperations !== "expandable" || !older.length) return current;
+  // Avoid giant HTML edits. Older history is explicitly bounded and escaped.
+  const historical = older.slice(-20).map(line => escape(line.slice(0, 110))).join("\n");
+  return current + "\n<blockquote expandable>" + older.length + " earlier operations\n" + historical + "</blockquote>";
+}
+
+export function formatVenomOperationState(completed: number, running: number, failed: number): string {
+  return [completed + " done", running + " running", failed + " failed"].join(" · ");
+}
+
+export function isVenomHud(preset?: string): boolean {
+  return preset === "symbiote-hud" || preset === "predator-terminal" || preset === "classified";
 }
