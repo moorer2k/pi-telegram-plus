@@ -262,7 +262,7 @@ export function formatVenomFooter(
   const parts: string[] = [];
   if (options?.showOperations !== false) parts.push(Math.max(0, Math.floor(operations)) + " operations");
   if (context) parts.push(context);
-  if (modelName) parts.push(venomThemeText(modelName, "", 55));
+  if (modelName) parts.push(venomThemeText(modelName, "", 240));
   if (options?.showElapsed !== false) {
     parts.push(venomThemeText(options?.footerLabel, VENOM_DEFAULTS.footerLabel, 24) + " " + formatHuntDuration(elapsedMs));
   }

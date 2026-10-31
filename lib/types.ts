@@ -32,6 +32,12 @@ export type VenomThemeOptions = {
   animation?: "symbiote" | "spinner" | "static";
   animationIntervalMs?: number;
   visibleOperations?: number;
+  /** Maximum visible command characters in the rich panel (24–240). */
+  commandLength?: number;
+  /** Maximum command characters in expandable history (24–240). */
+  historyCommandLength?: number;
+  /** Number of older operations retained in expandable history (0–40). */
+  historyOperations?: number;
   /** Earlier operations: omit them or include as a native expandable quote. */
   collapseOperations?: "off" | "expandable";
   /** Reserve exactly X operation rows in live progress messages. */

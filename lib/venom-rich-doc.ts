@@ -44,6 +44,9 @@ export function buildVenomRichPanel(ops: readonly VenomLiveOperation[],
   opts: VenomThemeOptions | undefined, meta: VenomPanelMeta): string {
   const count = typeof opts?.visibleOperations === "number" && Number.isFinite(opts.visibleOperations)
     ? Math.max(1, Math.min(12, Math.floor(opts.visibleOperations))) : 3;
+  const commandLength = Math.max(24, Math.min(240, Math.floor(opts?.commandLength ?? 72)));
+  const historyCommandLength = Math.max(24, Math.min(240, Math.floor(opts?.historyCommandLength ?? 96)));
+  const historyOperations = Math.max(0, Math.min(40, Math.floor(opts?.historyOperations ?? 16)));
   const blocks: VenomBlock[] = [
     { kind: "text", value: meta.title, bold: true },
     { kind: "text", value: "◈ " + meta.status, bold: true },
@@ -58,14 +61,14 @@ export function buildVenomRichPanel(ops: readonly VenomLiveOperation[],
       ? " " + (Math.max(0, op.finishedAt - op.startedAt) / 1000).toFixed(1) + "s" : "";
     const state = opts?.showOperationStates === false ? "" : " · " + op.state.toUpperCase() + elapsed;
     blocks.push({ kind: "text", value: glyph + " " + tag + state, bold: true });
-    blocks.push({ kind: "code", value: shortenVenomCommand(op.detail || op.tool) });
+    blocks.push({ kind: "code", value: shortenVenomCommand(op.detail || op.tool, commandLength) });
   }
   if (opts?.fixedOperationRows !== false) for (let i = recent.length; i < count; i++) {
     blocks.push({ kind: "text", value: "◈ TRACE · IDLE", bold: true });
     blocks.push({ kind: "code", value: "awaiting operation" });
   }
   if (opts?.collapseOperations !== "off") blocks.push({ kind: "details", title: "Earlier traces",
-    lines: ops.slice(0, -count).slice(-16).map(op => op.tag + " · " + op.state + " · " + shortenVenomCommand(op.detail, 48)) });
+    lines: ops.slice(0, -count).slice(-historyOperations).map(op => op.tag + " · " + op.state + " · " + shortenVenomCommand(op.detail, historyCommandLength)) });
   if (opts?.showObjective !== false) {
     blocks.push({ kind: "heading", value: meta.transmission });
     blocks.push({ kind: "text", value: meta.objective });
