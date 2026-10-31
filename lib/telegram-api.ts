@@ -346,12 +346,12 @@ export function createTelegramTransport(
     async setReaction(chatId, messageId, emoji) {
       if (!Number.isSafeInteger(chatId) || chatId === 0) throw new Error("Invalid Telegram chat ID");
       if (!Number.isSafeInteger(messageId) || messageId < 1) throw new Error("Invalid Telegram message ID");
-      if (!emoji || Array.from(emoji).length > 8) throw new Error("Invalid Telegram reaction emoji");
+      if (typeof emoji !== "string" || Array.from(emoji).length > 8) throw new Error("Invalid Telegram reaction emoji");
       const lease = captureSendLease();
       await callApi("setMessageReaction", {
         chat_id: chatId,
         message_id: messageId,
-        reaction: [{ type: "emoji", emoji }],
+        reaction: emoji ? [{ type: "emoji", emoji }] : [],
         is_big: false,
       }, undefined, lease, { maxAttempts: 1 });
     },
