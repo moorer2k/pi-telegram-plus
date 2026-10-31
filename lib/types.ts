@@ -278,6 +278,8 @@ export type TelegramTransport = {
   deleteMessage(chatId: number, messageId: number): Promise<void>;
   sendDocument(chatId: number, path: string, caption?: string, signal?: AbortSignal, messageThreadId?: number, replyToMessageId?: number): Promise<void>;
   sendPhoto(chatId: number, data: string, caption?: string, isPath?: boolean, signal?: AbortSignal, messageThreadId?: number, replyToMessageId?: number): Promise<void>;
+  /** Telegram Bot API ephemeral draft, private chats only; never a persisted message. */
+  sendDraft?(chatId: number, draftId: number, text: string): Promise<void>;
   sendChatAction(chatId: number, action: string, messageThreadId?: number): Promise<void>;
 };
 
