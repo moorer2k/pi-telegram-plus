@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { basename, extname } from "node:path";
+import { basename, extname, isAbsolute } from "node:path";
 import type { TelegramButton, TelegramConfig, TelegramSentMessage, TelegramTransport, TelegramUpdate } from "./types.ts";
 import { stripHtml, splitTelegramHtml } from "./text-split.ts";
 import { log } from "./logger.ts";
@@ -108,12 +108,40 @@ export async function getTelegramFile(token: string, fileId: string, signal?: Ab
  * `api.telegram.org` bypassed a mock or self-hosted Bot API server and sent
  * attachment downloads to the real Telegram service.
  */
+/** Use local file_path only when the Bot API itself is on this machine. */
+function isLoopbackTelegramApi(apiBase?: string): boolean {
+  try {
+    const url = new URL(telegramApiBase(apiBase));
+    return (url.protocol === "http:" || url.protocol === "https:") &&
+      ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+}
+
 export async function downloadTelegramFile(
   token: string,
   filePath: string,
   signal?: AbortSignal,
   apiBase?: string,
 ): Promise<Buffer> {
+  // In --local mode, the official Telegram Bot API returns an absolute file_path
+  // from getFile. That is a path on the API server's filesystem, not a URL.
+  // Only read it when the configured API is loopback, which is the supported
+  // same-host local Bot API setup. Never treat absolute paths from the public
+  // Telegram API or an arbitrary remote host as local filesystem reads.
+  if (isAbsolute(filePath) && isLoopbackTelegramApi(apiBase)) {
+    try {
+      return await readFile(filePath, { signal });
+    } catch (error) {
+      throw new Error("Failed to read local Telegram file from Bot API server: " +
+        (error instanceof Error ? error.message : String(error)));
+    }
+  }
+  if (isAbsolute(filePath)) {
+    throw new Error("Telegram Bot API returned an absolute file path, but the API endpoint is not local. " +
+      "The --local Bot API server must share this filesystem and use a loopback API endpoint.");
+  }
   const encodedPath = filePath.split("/").map((segment) => encodeURIComponent(segment)).join("/");
   const url = `${telegramApiBase(apiBase)}/file/bot${token}/${encodedPath}`;
   let response: Response;
