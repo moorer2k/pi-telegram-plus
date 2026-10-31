@@ -48,6 +48,7 @@ export async function configVenomThemeFlow(ui: MenuUi, deps: TgConfigDeps): Prom
       "Show operation count: " + (theme.showOperations === false ? "off" : "on"),
       "Show hunting time: " + (theme.showElapsed === false ? "off" : "on"),
       "Collapse history: " + (theme.collapseOperations ?? "off"),
+      "Fixed operation rows: " + (theme.fixedOperationRows === false ? "off" : "on"),
       "Tool details: " + (theme.operationDetail ?? "compact"),
       "Show tool states: " + (theme.showOperationStates === false ? "off" : "on"),
       "Show objective: " + (theme.showObjective === false ? "off" : "on"),
@@ -120,16 +121,18 @@ export async function configVenomThemeFlow(ui: MenuUi, deps: TgConfigDeps): Prom
       const selected = await pick(ui, "Earlier activity", ["off", "expandable"]);
       if (selected === "off" || selected === "expandable") await save(deps, { ...theme, collapseOperations: selected });
     } else if (choice === options[11]) {
+      await save(deps, { ...theme, fixedOperationRows: theme.fixedOperationRows === false });
+    } else if (choice === options[12]) {
       const selected = await pick(ui, "Operation verbosity", ["compact", "full"]);
       if (selected === "compact" || selected === "full") await save(deps, { ...theme, operationDetail: selected });
-    } else if (choice === options[12]) {
-      await save(deps, { ...theme, showOperationStates: theme.showOperationStates === false });
     } else if (choice === options[13]) {
-      await save(deps, { ...theme, showObjective: theme.showObjective === false });
+      await save(deps, { ...theme, showOperationStates: theme.showOperationStates === false });
     } else if (choice === options[14]) {
+      await save(deps, { ...theme, showObjective: theme.showObjective === false });
+    } else if (choice === options[15]) {
       const selected = await pick(ui, "Telemetry density", ["compact", "normal"]);
       if (selected === "compact" || selected === "normal") await save(deps, { ...theme, footerDensity: selected });
-    } else if (choice === options[15]) {
+    } else if (choice === options[16]) {
       if (await ui.confirm("Reset Venom appearance?", "Restore all default theme labels, animations and layout settings?")) {
         await save(deps, {});
       }
