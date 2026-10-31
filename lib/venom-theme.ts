@@ -399,9 +399,7 @@ function venomRichShort(value: string, max: number): string {
     : clean;
 }
 
-/** A native Rich card with predictable section geometry across every edit.
- * Use a fixed anchor and consistently bounded text instead of relying on
- * whatever length the latest command happens to be. */
+/** A native Rich card with bounded tool text, fixed slots and no width filler. */
 export function formatVenomRichLivePanel(
   operations: readonly VenomLiveOperation[],
   options: VenomThemeOptions | undefined,
@@ -420,7 +418,7 @@ export function formatVenomRichLivePanel(
     // The tool name is already shown as a tag; omit repeated "bash:" or
     // "terminal:" prefixes. Backticks prevent URLs from becoming clickable
     // rich links (a major source of unexpected Android line wrapping).
-    const raw = (op.detail || op.tool).replace(/^(?:bash|terminal|exec):\\s*/i, "");
+    const raw = (op.detail || op.tool).replace(/^(?:bash|terminal|exec):\s*/i, "");
     const detail = venomRichShort(raw, VENOM_RICH_DETAIL_WIDTH);
     const glyph = op.state === "failed" ? "×" : op.state === "done" ? "◆" : "◈";
     return "**" + glyph + " " + tag + escaped(state) + "**\n" +
@@ -446,7 +444,6 @@ export function formatVenomRichLivePanel(
   // No artificial width-filling divider: it cannot guarantee Telegram bubble
   // dimensions and visibly competes with the actual symbiote pulse.
   return "**" + escaped(venomRichShort(meta.title, 38)) + "**\n\n" +
-    "\`" + VENOM_RICH_WIDTH_ANCHOR + "\`\n\n" +
     "**◈ " + escaped(venomRichShort(meta.status, 32)) + "**\n\n" +
     (options?.showPulse === false ? "" : "\`" + (meta.pulse || "▱".repeat(VENOM_PULSE_WIDTH)) + "\`\n\n") +
     "## " + escaped(meta.section) + "\n\n" + slots.join("\n\n") + history +
