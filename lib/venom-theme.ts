@@ -391,72 +391,18 @@ export function formatVenomLiveOperations(
 /** Constant visual floor to discourage Telegram from shrinking the bubble.
  * Twenty-six monospace cells fit typical phone widths with a reply quote gutter.
  * Not a guarantee: Telegram owns the final bubble sizing. */
-export const VENOM_RICH_WIDTH_ANCHOR = "━".repeat(26);
-const VENOM_RICH_DETAIL_WIDTH = 30;
-const VENOM_RICH_META_WIDTH = 32;
+/** Typed Rich content is built separately from the Venom theme and lifecycle logic. */
+export { shortenVenomCommand } from "./venom-rich-doc.ts";
+import { buildVenomRichPanel } from "./venom-rich-doc.ts";
 
-function venomRichShort(value: string, max: number): string {
-  const clean = value.replace(/\s+/g, " ").trim();
-  return Array.from(clean).length > max
-    ? Array.from(clean).slice(0, max - 1).join("") + "…"
-    : clean;
-}
-
-/** A native Rich card with predictable section geometry across every edit.
- * Use a fixed anchor and consistently bounded text instead of relying on
- * whatever length the latest command happens to be. */
 export function formatVenomRichLivePanel(
   operations: readonly VenomLiveOperation[],
   options: VenomThemeOptions | undefined,
   meta: { title: string; status: string; pulse: string; section: string; transmission: string; objective: string; model: string; metrics: string },
 ): string {
-  const escaped = (input: string): string => input.replace(/&/g, "&amp;").replace(/</g, "&lt;")
-    .replace(/([\\*_~\`#[\]()!|])/g, "\\$1").replace(/\r?\n/g, " ");
-  const count = venomThemeNumber(options?.visibleOperations, 3, 1, 12);
-  const recent = operations.slice(-count);
-  const older = operations.slice(0, -count);
-  const line = (op: VenomLiveOperation): string => {
-    const tag = op.tag.replace(/[^A-Z0-9_-]/gi, "").slice(0, 10).toUpperCase() || "TRACE";
-    const duration = op.state !== "running" && op.finishedAt !== undefined
-      ? " " + (Math.max(0, op.finishedAt - op.startedAt) / 1000).toFixed(1) + "s" : "";
-    const state = options?.showOperationStates === false ? "" : " · " + op.state.toUpperCase() + duration;
-    const detail = venomRichShort(op.detail || op.tool, VENOM_RICH_DETAIL_WIDTH);
-    const glyph = op.state === "failed" ? "×" : op.state === "done" ? "◆" : "◈";
-    return "- **" + glyph + " " + tag + escaped(state) + "**\n  " + escaped(detail);
-  };
-  const slots = [...recent.map(line)];
-  if (options?.fixedOperationRows !== false) {
-    for (let i = slots.length; i < count; i++) slots.push("- **TRACE · IDLE**\n  awaiting operation");
-  }
-  if (!slots.length) slots.push("- Awaiting target");
-
-  // Always reserve the same collapsed history slot, so a fourth tool doesn't
-  // suddenly insert a new section. Keep the summary short and constant;
-  // historical commands are hidden until the user expands the details.
-  const history = options?.collapseOperations === "off" ? "" :
-    "\n\n<details>\n<summary>Earlier traces</summary>\n\n" +
-    (older.length
-      ? older.slice(-16).map(op => "- " + escaped(venomRichShort(
-        op.tag + " · " + op.state + " · " + op.detail, 65))).join("\n")
-      : "No earlier traces") +
-    "\n\n</details>";
-
-  // The anchor establishes the same minimum visible line width on every frame.
-  // The animated twelve-segment pulse retains its independent line immediately
-  // below; it does not attempt to communicate percent task completion.
-  return "**" + escaped(venomRichShort(meta.title, 38)) + "**\n\n" +
-    "\`" + VENOM_RICH_WIDTH_ANCHOR + "\`\n\n" +
-    "**◈ " + escaped(venomRichShort(meta.status, 32)) + "**\n\n" +
-    (options?.showPulse === false ? "" : "\`" + (meta.pulse || "▱".repeat(VENOM_PULSE_WIDTH)) + "\`\n\n") +
-    "## " + escaped(meta.section) + "\n\n" + slots.join("\n") + history +
-    (options?.showObjective === false ? "" :
-      "\n\n## " + escaped(meta.transmission) + "\n\n" + escaped(venomRichShort(meta.objective, VENOM_RICH_META_WIDTH))) +
-    "\n\n" + escaped(venomRichShort(meta.model, VENOM_RICH_META_WIDTH)) +
-    "\n\n" + escaped(venomRichShort(meta.metrics, VENOM_RICH_META_WIDTH));
+  return buildVenomRichPanel(operations, options, meta);
 }
 
-
-/** First progress message uses the same Rich geometry as subsequent edits. */
 export function formatVenomRichInitialPanel(options?: VenomThemeOptions): string {
   return formatVenomRichLivePanel([], options, {
     title: venomThemeText(options?.title, VENOM_DEFAULTS.title),
