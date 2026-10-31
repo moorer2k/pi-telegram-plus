@@ -343,6 +343,24 @@ export function createTelegramTransport(
   };
 
   return {
+    async sendRichDraft(chatId, draftId, markdown, messageThreadId) {
+      if (!richMessagesAvailable || !markdown.trim()) return false;
+      const lease = captureSendLease();
+      try {
+        await callApi("sendRichMessageDraft", {
+          chat_id: chatId,
+          draft_id: draftId,
+          rich_message: { markdown, skip_entity_detection: true },
+          ...(messageThreadId === undefined ? {} : { message_thread_id: messageThreadId }),
+        }, undefined, lease, { maxAttempts: 1 });
+        return true;
+      } catch (err) {
+        if (err instanceof TelegramSendSuppressedError) throw err;
+        if (isNetworkError(err)) throw err;
+        noteRichFailure("sendRichMessageDraft", err);
+        return false;
+      }
+    },
     async sendText(chatId, text, messageThreadId, replyToMessageId, richMarkdown, delivery) {
       const lease = captureSendLease();
       if (richMarkdown && richMessagesAvailable) {
