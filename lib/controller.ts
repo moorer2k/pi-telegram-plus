@@ -765,6 +765,8 @@ export function useHostPromptsForCommand(commandName: string, hostDialogsAvailab
 
 export function createTelegramController(deps: {
   getSession: () => CapturedAgentSession | undefined;
+  /** Independent sessions must be supplied by the host, never inferred from getSession(). */
+  getIsolatedSession?: (chatId: number, messageThreadId?: number) => Promise<CapturedAgentSession>;
   transport: TelegramTransport;
   ui: TelegramUiRuntime;
   authorizeUser(userId: number | undefined, text?: string): Promise<boolean | "paired">;
@@ -1629,9 +1631,17 @@ export function createTelegramController(deps: {
       // the owner. Non-owner mentions use the restricted prompt-only path.
       if (isGroup && !addressed) return;
       if (isGroup && policy === "owner-mentions" && !ownerAuthorized && !recognized) return;
-      // Explicit per-chat mode fails closed until actual session dispatch is
-      // available; never silently alias a group to the owner session.
-      if (isGroup && deps.getConfig?.().sessionIsolation === "per-chat") return;
+      // Until the host can create and route genuinely independent Pi sessions,
+      // fail closed for every chat and topic rather than leak into the owner session.
+      if (deps.getConfig?.().sessionIsolation === "per-chat") {
+        await deps.transport.sendText(
+          chatId,
+          "Per-chat sessions are not available in this host runtime yet.",
+          messageThreadId,
+          sourceMessageId,
+        );
+        return;
+      }
       const openMention = isGroup && !ownerAuthorized && addressed;
       if (!openMention) {
         const authorization = await deps.authorizeUser(message.from?.id, rawText);
